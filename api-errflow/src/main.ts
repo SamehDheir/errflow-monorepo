@@ -7,14 +7,9 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
+  const frontendUrl = configService.get<string>("FRONTEND_URL") || "http://localhost:3000";
   app.enableCors({
-    origin: [
-      configService.get<string>("FRONTEND_URL") || "http://localhost:3000",
-      "https://www.errflow.dev",
-      "https://errflow.dev",
-      "https://errflow.vercel.app",
-      "http://localhost:3000",
-    ],
+    origin: [frontendUrl, "http://localhost:3000"],
     credentials: true,
   });
 
