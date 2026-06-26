@@ -154,6 +154,9 @@ export class AuthService {
       if (!user) throw new UnauthorizedException();
       if (user.isSuspended) throw new UnauthorizedException('Account is suspended');
 
+      const blocked = await this.isRefreshTokenBlocked(payload.sub, refreshToken);
+      if (blocked) throw new UnauthorizedException('Refresh token has been revoked');
+
       const tokens = await this.generateTokens(
         user.id,
         user.email,
