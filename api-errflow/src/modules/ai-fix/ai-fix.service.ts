@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import Groq from 'groq-sdk';
 import { WebsocketService } from '../../websockets/websocket.service';
 
@@ -151,18 +151,18 @@ export class AiFixService {
    * Uses --passWithNoTests so files without dedicated tests don't block the pipeline.
    */
   async runExistingTests(filePath: string): Promise<TestRunResult> {
-    try {
-      const output = execSync(
-        `npx jest --testPathPattern=${filePath} --passWithNoTests --forceExit`,
-        { timeout: TEST_TIMEOUT_MS, encoding: 'utf-8' },
-      );
-      return { passed: true, output };
-    } catch (error: any) {
-      return {
-        passed: false,
-        output: error.stdout ?? error.message ?? 'Unknown test error',
-      };
+    const result = spawnSync(
+      'npx',
+      ['jest', '--testPathPattern', filePath, '--passWithNoTests', '--forceExit'],
+      { timeout: TEST_TIMEOUT_MS, encoding: 'utf-8' },
+    );
+
+    if (result.error) {
+      return { passed: false, output: result.error.message };
     }
+
+    const output = (result.stdout ?? '') + (result.stderr ?? '');
+    return { passed: result.status === 0, output };
   }
 
   // ─────────────────────────────────────────────
