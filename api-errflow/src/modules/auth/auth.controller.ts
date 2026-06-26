@@ -65,17 +65,7 @@ export class AuthController {
 
   @Public()
   @Post("github/oauth")
-  async githubOAuth(
-    @Body() body: { email: string; name: string; githubId: string },
-  ) {
-    console.log("[Auth Controller] GitHub OAuth request received:", body);
-    try {
-      const result = await this.authService.githubOAuthLogin(body);
-      console.log("[Auth Controller] GitHub OAuth success");
-      return result;
-    } catch (error) {
-      console.error("[Auth Controller] GitHub OAuth error:", error);
-      throw error;
-    }
+  async githubOAuth(@Body() body: { accessToken: string }) {
+    return this.authService.githubOAuthLogin(body.accessToken);
   }
 }

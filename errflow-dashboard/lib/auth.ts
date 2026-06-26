@@ -99,12 +99,7 @@ export const { handlers, signIn, auth } = NextAuth({
           const response = await fetch(`${API_BASE}/auth/github/oauth`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              email:       (profile as any)?.email || user.email,
-              name:        (profile as any)?.name  || (profile as any)?.login || user.name,
-              githubId:    (profile as any)?.login || String((profile as any)?.id),
-              accessToken: account.access_token,
-            }),
+            body: JSON.stringify({ accessToken: account.access_token }),
           })
 
           if (!response.ok) {

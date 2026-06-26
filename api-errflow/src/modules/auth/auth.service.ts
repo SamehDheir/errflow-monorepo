@@ -325,29 +325,56 @@ export class AuthService {
     };
   }
 
-  async githubOAuthLogin(body: {
-    email: string;
-    name: string;
-    githubId: string;
-    accessToken?: string;
-  }) {
+  async githubOAuthLogin(accessToken: string) {
+    // Verify the token against GitHub — never trust client-supplied identity data
+    const userResponse = await fetch('https://api.github.com/user', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'User-Agent': 'errflow-api',
+      },
+    });
+
+    if (!userResponse.ok) {
+      throw new UnauthorizedException('Invalid GitHub access token');
+    }
+
+    const githubUser = await userResponse.json();
+
+    // GitHub users may have a private primary email; fetch it explicitly when absent
+    let email: string | null = githubUser.email ?? null;
+    if (!email) {
+      const emailsResponse = await fetch('https://api.github.com/user/emails', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': 'errflow-api',
+        },
+      });
+      if (emailsResponse.ok) {
+        const emails: Array<{ email: string; primary: boolean; verified: boolean }> =
+          await emailsResponse.json();
+        email = emails.find(e => e.primary && e.verified)?.email ?? null;
+      }
+    }
+
+    if (!email) {
+      throw new UnauthorizedException(
+        'GitHub account has no verified email address',
+      );
+    }
+
+    const encryptedToken = this.cryptoService.encrypt(accessToken);
+    const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
     let user = await this.prisma.user.findUnique({
-      where: { email: body.email },
+      where: { email },
       include: { organization: true },
     });
 
-    let encryptedToken = null;
-    let tokenExpiresAt = null;
-    if (body.accessToken) {
-      encryptedToken = this.cryptoService.encrypt(body.accessToken);
-      tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    }
-
     if (!user) {
-      const orgSlug = `${body.githubId.toLowerCase()}-${Date.now()}`;
+      const orgSlug = `${githubUser.login.toLowerCase()}-${Date.now()}`;
       const organization = await this.prisma.organization.create({
         data: {
-          name: `${body.githubId}'s Organization`,
+          name: `${githubUser.login}'s Organization`,
           slug: orgSlug,
           plan: 'FREE',
           fixesUsedThisMonth: 0,
@@ -356,40 +383,30 @@ export class AuthService {
         },
       });
 
-      const userData: any = {
-        email: body.email,
-        name: body.name,
-        passwordHash: '',
-        role: 'OWNER',
-        organizationId: organization.id,
-        githubUsername: body.githubId,
-        githubId: body.githubId,
-        ...(encryptedToken && {
-          githubAccessTokenEncrypted: encryptedToken.encrypted,
-          githubAccessTokenIv: encryptedToken.iv,
-          githubAccessTokenKeyVersion: encryptedToken.keyVersion,
-          githubTokenExpiresAt: tokenExpiresAt,
-        }),
-      };
-
       user = await this.prisma.user.create({
-        data: userData,
-        include: { organization: true },
-      });
-    } else if (encryptedToken) {
-      user = await this.prisma.user.update({
-        where: { id: user.id },
         data: {
-          githubAccessTokenEncrypted: encryptedToken.encrypted,
-          githubAccessTokenIv: encryptedToken.iv,
-          githubAccessTokenKeyVersion: encryptedToken.keyVersion,
-          githubUsername: body.githubId,
-          githubId: body.githubId,
-          githubTokenExpiresAt: tokenExpiresAt,
+          email,
+          name: githubUser.name || githubUser.login,
+          passwordHash: '',
+          role: 'OWNER',
+          organizationId: organization.id,
         } as any,
         include: { organization: true },
       });
     }
+
+    user = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        githubAccessTokenEncrypted: encryptedToken.encrypted,
+        githubAccessTokenIv: encryptedToken.iv,
+        githubAccessTokenKeyVersion: encryptedToken.keyVersion,
+        githubUsername: githubUser.login,
+        githubId: githubUser.id.toString(),
+        githubTokenExpiresAt: tokenExpiresAt,
+      } as any,
+      include: { organization: true },
+    });
 
     const tokens = await this.generateTokens(
       user.id, user.email, user.role, user.organizationId,
