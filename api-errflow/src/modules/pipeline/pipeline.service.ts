@@ -21,8 +21,6 @@ export class PipelineService {
 
   async run(errorEventId: string) {
     let fixAttemptId: string | null = null;
-    let tempDir: string | null = null;
-    let testPassed = false;
 
     try {
       this.logger.log(
@@ -64,15 +62,6 @@ export class PipelineService {
           this.logger.log(`[STEP 2] Extracted repo name from URL: ${repoName}`);
         }
       }
-
-      this.logger.log(
-        `[STEP 2] Found project: ${project.name}, org: ${organization.name}`,
-      );
-
-      await this.prisma.errorEvent.update({
-        where: { id: errorEventId },
-        data: { status: ErrorStatus.PROCESSING },
-      });
 
       const fixAttempt = await this.prisma.fixAttempt.create({
         data: {
@@ -172,15 +161,20 @@ export class PipelineService {
         },
       });
       this.logger.log(`[STEP 7] Status updated to GENERATING`);
-      const aiFix = await this.aiFixService.generateFix({
+
+      const decision = await this.aiFixService.generateAndDecide({
         errorMessage: errorEvent.message,
         stackTrace: errorEvent.stack || "",
         filePath: relativeFilePath,
-        lineNumber: stackTrace.primaryLine,
+        lineNumber: stackTrace.primaryLine || 0,
         functionName: stackTrace.primaryFunction || "unknown",
         fileContent: fileContent.content,
         language: stackTrace.language,
+        organizationId: organization.id,
+        errorEventId: errorEventId,
       });
+
+      const aiFix = decision.fix;
       this.logger.log(
         `[STEP 7] AI fix generated - confidence: ${aiFix.confidenceScore}`,
       );
@@ -203,19 +197,6 @@ export class PipelineService {
       this.logger.log(
         `[STEP 8] Changed lines: ${aiFix.changedLines}, Confidence: ${aiFix.confidenceScore}`,
       );
-
-      // Use the new AI Fix Service decision logic (includes running existing tests)
-      const decision = await this.aiFixService.generateAndDecide({
-        errorMessage: errorEvent.message,
-        stackTrace: errorEvent.stack || "",
-        filePath: relativeFilePath,
-        lineNumber: stackTrace.primaryLine || 0,
-        functionName: stackTrace.primaryFunction || "unknown",
-        fileContent: fileContent.content,
-        language: stackTrace.language,
-        organizationId: organization.id,
-        errorEventId: errorEventId,
-      });
 
       this.logger.log(
         `[STEP 8] AI Decision: ${decision.action} - Reason: ${decision.reason}`,
@@ -372,7 +353,7 @@ export class PipelineService {
           explanation: aiFix.explanation,
           rootCause: aiFix.rootCause,
           confidenceScore: aiFix.confidenceScore,
-          testsPassed: testPassed,
+          testsPassed: decision.reason === 'tests_passed',
         });
       }
 
