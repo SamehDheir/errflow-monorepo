@@ -68,11 +68,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found');
     }
 
-    // Check if user has admin role for admin routes
-    if (req.originalUrl?.includes('/admin') && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
-      throw new UnauthorizedException('Admin access required');
-    }
-
     return {
       id: user.id,
       email: user.email,
