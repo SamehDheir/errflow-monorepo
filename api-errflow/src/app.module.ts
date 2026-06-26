@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { validateEnv } from "./config/env.validation";
 import { ThrottlerModule } from "@nestjs/throttler";
 import { AuthModule } from "./modules/auth/auth.module";
 import { ApiKeysModule } from "./modules/api-keys/api-keys.module";
@@ -24,6 +25,7 @@ import { AppController } from "./app.controller";
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      validate: validateEnv,
     }),
     ThrottlerModule.forRoot([
       {
