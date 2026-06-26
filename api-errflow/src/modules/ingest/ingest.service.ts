@@ -83,12 +83,12 @@ export class IngestService {
       };
     }
 
-    // Check for regressions (error previously resolved, now reappearing)
+    // Check for regressions (error previously auto-fixed, now reappearing)
     const resolvedError = await this.prisma.errorEvent.findFirst({
       where: {
         projectId,
         fingerprint,
-        status: ErrorStatus.IGNORED,
+        status: ErrorStatus.FIX_READY,
       },
       orderBy: { lastSeenAt: "desc" },
     });
