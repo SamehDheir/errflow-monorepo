@@ -3,10 +3,8 @@ import {
   WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
-  SubscribeMessage,
-  MessageBody,
-  ConnectedSocket,
 } from '@nestjs/websockets';
+import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 
@@ -20,6 +18,8 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
   @WebSocketServer()
   server: Server;
 
+  private readonly logger = new Logger(WebsocketGateway.name);
+
   constructor(private jwtService: JwtService) {}
 
   async handleConnection(client: Socket) {
@@ -32,50 +32,30 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
 
       const decoded = this.jwtService.verify(token);
       client.data.organizationId = decoded.organizationId;
-      client.data.userId = decoded.id;
+      client.data.userId = decoded.sub;
 
-      // Join organization-specific room
-      const room = `org:${decoded.organizationId}`;
-      await client.join(room);
+      // Room assignment happens here — clients cannot request additional rooms
+      await client.join(`org:${decoded.organizationId}`);
 
-      console.log(`Client connected: ${client.id} to org: ${decoded.organizationId}`);
-    } catch (error) {
-      console.error('WebSocket authentication failed:', error);
+      this.logger.log(`Client ${client.id} connected to org:${decoded.organizationId}`);
+    } catch {
       client.disconnect();
     }
   }
 
   handleDisconnect(client: Socket) {
-    console.log(`Client disconnected: ${client.id}`);
+    this.logger.log(`Client ${client.id} disconnected`);
   }
 
-  // Send notification to specific organization
   async sendNotification(organizationId: string, notification: any) {
-    const room = `org:${organizationId}`;
-    this.server.to(room).emit('notification', notification);
+    this.server.to(`org:${organizationId}`).emit('notification', notification);
   }
 
-  // Send error update to specific organization
   async sendErrorUpdate(organizationId: string, error: any) {
-    const room = `org:${organizationId}`;
-    this.server.to(room).emit('error-update', error);
+    this.server.to(`org:${organizationId}`).emit('error-update', error);
   }
 
-  // Send PR update to specific organization
   async sendPrUpdate(organizationId: string, pr: any) {
-    const room = `org:${organizationId}`;
-    this.server.to(room).emit('pr-update', pr);
-  }
-
-  @SubscribeMessage('join-room')
-  handleJoinRoom(@ConnectedSocket() client: Socket, @MessageBody() room: string) {
-    client.join(room);
-    return { event: 'joined', room };
-  }
-
-  @SubscribeMessage('leave-room')
-  handleLeaveRoom(@ConnectedSocket() client: Socket, @MessageBody() room: string) {
-    client.leave(room);
-    return { event: 'left', room };
+    this.server.to(`org:${organizationId}`).emit('pr-update', pr);
   }
 }
