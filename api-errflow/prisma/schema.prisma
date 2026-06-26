@@ -1,0 +1,409 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  SUPER_ADMIN
+}
+
+enum ErrorStatus {
+  RECEIVED
+  QUEUED
+  PROCESSING
+  FIX_READY
+  FAILED
+  IGNORED
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum FixStatus {
+  PENDING
+  ANALYZING
+  GENERATING
+  TESTING
+  SUCCESS
+  FAILED
+  NEEDS_MANUAL_REVIEW
+}
+
+enum PrStatus {
+  OPEN
+  MERGED
+  CLOSED
+}
+
+enum NotificationChannel {
+  EMAIL
+  SLACK
+  DISCORD
+  TEAMS
+  WEBHOOK
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model Organization {
+  id                 String          @id @default(cuid())
+  name               String
+  slug               String          @unique
+  plan               Plan            @default(FREE)
+  fixesUsedThisMonth Int             @default(0)
+  fixesLimit         Int?
+  billingCycleStart  DateTime        @default(now())
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  apiKeys            ApiKey[]
+  errorEvents        ErrorEvent[]
+  fixAttempts        FixAttempt[]
+  notifications      Notification[]
+  projects           Project[]
+  pullRequests       PullRequest[]
+  users              User[]
+  billingAccount     BillingAccount?
+
+  @@index([slug])
+}
+
+model User {
+  id                          String             @id @default(cuid())
+  email                       String             @unique
+  name                        String
+  passwordHash                String
+  role                        Role               @default(MEMBER)
+  organizationId              String?
+  createdAt                   DateTime           @default(now())
+  updatedAt                   DateTime           @updatedAt
+  isSuspended                 Boolean            @default(false)
+  suspendedAt                 DateTime?
+  suspendedReason             String?
+  githubAccessTokenEncrypted  String?
+  githubAccessTokenIv         String?
+  githubAccessTokenKeyVersion Int?
+  githubUsername              String?
+  githubId                    String?
+  githubTokenExpiresAt        DateTime?
+  organization                Organization?      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  refreshTokens               RefreshToken[]
+  sessions                    SessionRecording[]
+
+  @@index([email])
+  @@index([organizationId])
+}
+
+model Project {
+  id                    String             @id @default(cuid())
+  name                  String
+  organizationId        String
+  githubOwner           String
+  githubRepo            String
+  defaultBranch         String             @default("main")
+  githubTokenEncrypted  String?
+  githubTokenIv         String?
+  githubTokenKeyVersion Int?
+  isActive              Boolean            @default(true)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  apiKeys               ApiKey[]
+  errorEvents           ErrorEvent[]
+  organization          Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pullRequests          PullRequest[]
+  sessionRecordings     SessionRecording[]
+
+  @@unique([githubOwner, githubRepo, organizationId])
+  @@index([organizationId])
+}
+
+model ApiKey {
+  id             String       @id @default(cuid())
+  projectId      String
+  organizationId String
+  keyHash        String       @unique
+  keyPrefix      String
+  label          String?
+  lastUsedAt     DateTime?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([keyHash])
+  @@index([projectId])
+  @@index([organizationId])
+}
+
+model ErrorEvent {
+  id              String      @id @default(cuid())
+  projectId       String
+  organizationId  String
+  message         String
+  stack           String?
+  errorName       String      @default("Error")
+  errorCode       String?
+  fingerprint     String? // For deduplication
+  environment     String
+  status          ErrorStatus @default(RECEIVED)
+  severity        Severity    @default(MEDIUM)
+  isRegression    Boolean     @default(false)
+  occurrenceCount Int         @default(1)
+  firstSeenAt     DateTime    @default(now())
+  lastSeenAt      DateTime    @default(now())
+
+  // AI Fix Context
+  codeContext Json? // Array of CodeContext objects
+  gitBlame    Json? // GitBlame object
+  recentDiff  Json? // GitDiff object
+
+  // Request Context
+  requestContext Json? // RequestContext object
+
+  // Breadcrumbs
+  breadcrumbs Json? // Array of Breadcrumb objects
+
+  // Runtime & Metadata
+  runtime  Json?
+  metadata Json?
+
+  createdAt     DateTime       @default(now())
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fixAttempts   FixAttempt[]
+  notifications Notification[]
+  pullRequests  PullRequest[]
+
+  @@index([projectId, status, createdAt])
+  @@index([message, projectId])
+  @@index([fingerprint, projectId])
+  @@index([organizationId])
+}
+
+model FixAttempt {
+  id                   String       @id @default(cuid())
+  errorEventId         String
+  organizationId       String
+  status               FixStatus    @default(PENDING)
+  targetFile           String?
+  originalCode         String?
+  fixedCode            String?
+  explanation          String?
+  rootCause            String?
+  testResult           Json?
+  confidenceScore      Float?
+  lowConfidence        Boolean      @default(false)
+  aiModel              String?
+  tokensUsed           Int?
+  durationMs           Int?
+  createdAt            DateTime     @default(now())
+  changedLines         Int?
+  failureReason        String?
+  requiresManualReview Boolean      @default(false)
+  errorEvent           ErrorEvent   @relation(fields: [errorEventId], references: [id], onDelete: Cascade)
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pullRequests         PullRequest?
+
+  @@index([errorEventId])
+  @@index([organizationId])
+}
+
+model PullRequest {
+  id             String         @id @default(cuid())
+  fixAttemptId   String         @unique
+  errorEventId   String
+  projectId      String
+  organizationId String
+  githubPrNumber Int?
+  githubPrUrl    String?
+  branchName     String?
+  title          String?
+  body           String?
+  status         PrStatus       @default(OPEN)
+  mergedAt       DateTime?
+  createdAt      DateTime       @default(now())
+  notifications  Notification[]
+  errorEvent     ErrorEvent     @relation(fields: [errorEventId], references: [id], onDelete: Cascade)
+  fixAttempt     FixAttempt     @relation(fields: [fixAttemptId], references: [id], onDelete: Cascade)
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([errorEventId])
+  @@index([projectId])
+  @@index([fixAttemptId])
+  @@index([organizationId])
+}
+
+model Notification {
+  id             String              @id @default(cuid())
+  organizationId String
+  errorEventId   String?
+  pullRequestId  String?
+  channel        NotificationChannel
+  recipient      String
+  status         NotificationStatus  @default(PENDING)
+  sentAt         DateTime?
+  createdAt      DateTime            @default(now())
+  errorEvent     ErrorEvent?         @relation(fields: [errorEventId], references: [id])
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pullRequest    PullRequest?        @relation(fields: [pullRequestId], references: [id])
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model DeletionLog {
+  id               String    @id @default(cuid())
+  organizationId   String
+  organizationName String
+  deletedBy        String
+  deletedAt        DateTime  @default(now())
+  stats            Json
+  restoredAt       DateTime?
+  restoredBy       String?
+
+  @@index([organizationId])
+  @@index([deletedAt])
+}
+
+model AdminAuditLog {
+  id           String   @id @default(cuid())
+  adminId      String
+  adminEmail   String
+  action       String
+  resourceType String
+  resourceId   String?
+  oldValues    Json?
+  newValues    Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([adminId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([createdAt])
+}
+
+// ============================================
+// Session Replay & Recording
+// ============================================
+
+enum SessionStatus {
+  RECORDING
+  COMPLETED
+  ERROR
+}
+
+model SessionRecording {
+  id            String        @id @default(cuid())
+  projectId     String
+  userId        String
+  errorEventId  String?
+  status        SessionStatus @default(RECORDING)
+  startTime     DateTime      @default(now())
+  endTime       DateTime?
+  duration      Int? // milliseconds
+  userAgent     String?
+  url           String?
+  ipAddress     String?
+  metadata      Json? // custom metadata
+  recordingData Json? // compressed session events
+  createdAt     DateTime      @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([errorEventId])
+  @@index([createdAt])
+}
+
+// ============================================
+// Billing & Stripe Integration
+// ============================================
+
+enum StripeSubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+}
+
+model BillingAccount {
+  id                   String                   @id @default(cuid())
+  organizationId       String                   @unique
+  stripeCustomerId     String?                  @unique
+  stripeSubscriptionId String?                  @unique
+  stripeProductId      String?
+  stripePriceId        String?
+  status               StripeSubscriptionStatus @default(TRIALING)
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  trialEndsAt          DateTime?
+  canceledAt           DateTime?
+  lastPaymentFailure   String?
+  lastPaymentFailedAt  DateTime?
+  organization         Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoices             Invoice[]
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  @@index([organizationId])
+  @@index([stripeCustomerId])
+}
+
+model Invoice {
+  id               String         @id @default(cuid())
+  billingAccountId String
+  stripeInvoiceId  String?        @unique
+  amount           Float // in cents
+  currency         String         @default("usd")
+  status           String         @default("draft")
+  pdfUrl           String?
+  hostedInvoiceUrl String?
+  dueDate          DateTime?
+  paidAt           DateTime?
+  createdAt        DateTime       @default(now())
+  billingAccount   BillingAccount @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+
+  @@index([billingAccountId])
+  @@index([status])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}

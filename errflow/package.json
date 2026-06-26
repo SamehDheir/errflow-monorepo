@@ -1,0 +1,66 @@
+{
+  "name": "errflow",
+  "version": "1.0.0",
+  "description": "Lightweight error monitoring for Node.js applications",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./monitor": {
+      "types": "./dist/monitor.d.ts",
+      "import": "./dist/monitor.mjs",
+      "require": "./dist/monitor.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "error",
+    "monitoring",
+    "tracking",
+    "nodejs",
+    "typescript",
+    "errflow",
+    "crash-reporting",
+    "exception-handler",
+    "unhandled-rejection",
+    "uncaught-exception",
+    "observability",
+    "logging",
+    "apm"
+  ],
+  "author": "Sameh Dheir",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SamehDheir/errflow.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SamehDheir/errflow/issues"
+  },
+  "homepage": "https://github.com/SamehDheir/errflow#readme",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "zod": "^3.22.0",
+    "dotenv": "^16.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

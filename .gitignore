@@ -1,0 +1,120 @@
+# ============================================================
+# Errflow Monorepo — .gitignore
+# Covers: NestJS API, Next.js Dashboard, TypeScript SDK
+# ============================================================
+
+# ------------------------------------------------------------------
+# Environment & Secrets (most important)
+# .env.example and .env.template are SAFE to commit (placeholders only)
+# Everything else is not.
+# ------------------------------------------------------------------
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+.env.staging
+
+# ------------------------------------------------------------------
+# Dependencies
+# ------------------------------------------------------------------
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# ------------------------------------------------------------------
+# Build outputs
+# ------------------------------------------------------------------
+dist/
+build/
+out/
+.next/
+.nuxt/
+*.tsbuildinfo
+next-env.d.ts
+
+# ------------------------------------------------------------------
+# Prisma
+# ------------------------------------------------------------------
+# The generated client is re-generated on install — don't commit it
+prisma/generated/
+
+# ------------------------------------------------------------------
+# Logs
+# ------------------------------------------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ------------------------------------------------------------------
+# Test & Coverage
+# ------------------------------------------------------------------
+coverage/
+*.lcov
+.nyc_output/
+
+# ------------------------------------------------------------------
+# Cache directories
+# ------------------------------------------------------------------
+.cache/
+.parcel-cache/
+.turbo/
+.vercel/
+.eslintcache
+.stylelintcache
+
+# ------------------------------------------------------------------
+# OS artifacts
+# ------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ------------------------------------------------------------------
+# IDE & Editor
+# ------------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*~
+.vscode-test/
+
+# ------------------------------------------------------------------
+# Runtime & Process
+# ------------------------------------------------------------------
+pids/
+*.pid
+*.pid.lock
+*.seed
+
+# ------------------------------------------------------------------
+# Package manager artifacts
+# ------------------------------------------------------------------
+.npm/
+.yarn-integrity
+jspm_packages/
+
+# ------------------------------------------------------------------
+# Misc
+# ------------------------------------------------------------------
+*.pem
+*.tgz
+.node_repl_history
+.dynamodb/
+.serverless/
+.fusebox/
