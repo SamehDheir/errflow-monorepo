@@ -7,6 +7,7 @@ import {
   clearBreadcrumbs,
   setRequestContext,
   clearRequestContext,
+  runWithRequestScope,
 } from './monitor';
 import { markResolved } from './context';
 import type { Breadcrumb, RequestContext, SeverityHints } from './monitor';
@@ -111,8 +112,11 @@ export class Errflow {
   }
 
   /**
-   * Express / Fastify middleware that wires up request context automatically
-   * and clears it when the response finishes.
+   * Express / Fastify middleware that establishes an isolated per-request
+   * scope (via AsyncLocalStorage) and wires up request context automatically.
+   * Breadcrumbs and request context recorded during the request can't leak
+   * into concurrent requests, and the scope is cleaned up automatically when
+   * the request's async context ends — no manual clearing required.
    *
    * @example
    * app.use(Errflow.middleware());
@@ -126,25 +130,22 @@ export class Errflow {
         user?: { id?: string | number };
         headers: Record<string, string | string[] | undefined>;
       },
-      res: { on: (event: string, cb: () => void) => void },
+      _res: unknown,
       next: () => void,
     ): void => {
-      Errflow.clearBreadcrumbs();
-      Errflow.setRequestContext({
-        method: req.method,
-        url: req.url,
-        bodyKeys: req.body && typeof req.body === 'object'
-          ? Object.keys(req.body as object)
-          : [],
-        userId: req.user?.id,
-        traceId: req.headers['x-trace-id'] as string | undefined,
-      });
+      runWithRequestScope(() => {
+        Errflow.setRequestContext({
+          method: req.method,
+          url: req.url,
+          bodyKeys: req.body && typeof req.body === 'object'
+            ? Object.keys(req.body as object)
+            : [],
+          userId: req.user?.id,
+          traceId: req.headers['x-trace-id'] as string | undefined,
+        });
 
-      res.on('finish', () => {
-        Errflow.clearRequestContext();
+        next();
       });
-
-      next();
     };
   }
 

@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'async_hooks';
 import { sendError } from './sender';
 import { getConfig, isDisabled } from './config/env';
 import { collectErrorContext, SeverityHints } from './context';
@@ -32,13 +33,42 @@ export { SeverityHints };
 // ─── State ────────────────────────────────────────────────────────────────────
 
 const errorCache = new Map<string, number>();
-const breadcrumbs: Breadcrumb[] = [];
-let currentRequestContext: RequestContext | null = null;
 let listenersAttached = false;
+
+/**
+ * Per-request scope. Breadcrumbs and request context live here so that
+ * concurrent requests on the same server can't leak context into each
+ * other's error payloads.
+ */
+interface RequestStore {
+  breadcrumbs: Breadcrumb[];
+  requestContext: RequestContext | null;
+}
+
+const requestScope = new AsyncLocalStorage<RequestStore>();
+
+/**
+ * Fallback store for code running outside any request scope — scripts,
+ * background jobs, or apps that don't use Errflow.middleware().
+ */
+const globalStore: RequestStore = { breadcrumbs: [], requestContext: null };
+
+function activeStore(): RequestStore {
+  return requestScope.getStore() ?? globalStore;
+}
+
+/**
+ * Runs `fn` inside a fresh, isolated request scope. Errflow.middleware()
+ * uses this so every request gets its own breadcrumbs and request context.
+ */
+export function runWithRequestScope<T>(fn: () => T): T {
+  return requestScope.run({ breadcrumbs: [], requestContext: null }, fn);
+}
 
 // ─── Breadcrumbs ──────────────────────────────────────────────────────────────
 
 export function addBreadcrumb(crumb: Omit<Breadcrumb, 'timestamp'>): void {
+  const { breadcrumbs } = activeStore();
   breadcrumbs.push({ ...crumb, timestamp: new Date().toISOString() });
   if (breadcrumbs.length > MAX_BREADCRUMBS) {
     breadcrumbs.shift();
@@ -46,21 +76,25 @@ export function addBreadcrumb(crumb: Omit<Breadcrumb, 'timestamp'>): void {
 }
 
 export function clearBreadcrumbs(): void {
-  breadcrumbs.length = 0;
+  activeStore().breadcrumbs.length = 0;
 }
 
 function getBreadcrumbs(): Breadcrumb[] {
-  return [...breadcrumbs];
+  return [...activeStore().breadcrumbs];
 }
 
 // ─── Request Context ──────────────────────────────────────────────────────────
 
 export function setRequestContext(ctx: RequestContext): void {
-  currentRequestContext = ctx;
+  activeStore().requestContext = ctx;
 }
 
 export function clearRequestContext(): void {
-  currentRequestContext = null;
+  activeStore().requestContext = null;
+}
+
+function getRequestContext(): RequestContext | null {
+  return activeStore().requestContext;
 }
 
 // ─── Cache / Fingerprint ──────────────────────────────────────────────────────
@@ -134,7 +168,7 @@ function buildPayload(
     recentDiff: errorContext.recentDiff,
 
     // ── Request ───────────────────────────────────────────────────────────────
-    request: currentRequestContext ?? undefined,
+    request: getRequestContext() ?? undefined,
 
     // ── Breadcrumbs ───────────────────────────────────────────────────────────
     breadcrumbs: getBreadcrumbs(),
