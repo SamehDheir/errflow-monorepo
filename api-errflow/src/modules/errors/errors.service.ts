@@ -4,10 +4,11 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QueryErrorsDto } from './dto/query-errors.dto';
 import { ErrorStatus, FixStatus } from '@prisma/client';
-import { PipelineService } from '../pipeline/pipeline.service';
 import { GitHubService } from '../github/github.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
@@ -18,7 +19,7 @@ export class ErrorsService {
 
   constructor(
     private prisma: PrismaService,
-    private pipelineService: PipelineService,
+    @InjectQueue('pipeline') private pipelineQueue: Queue,
     private githubService: GitHubService,
     private notificationsService: NotificationsService,
     private cryptoService: CryptoService,
@@ -363,16 +364,15 @@ export class ErrorsService {
       throw new NotFoundException('Error event not found');
     }
 
-    // Reset status to trigger new pipeline run
+    // Reset status and enqueue a pipeline job — same path as ingest, so the
+    // retry gets the queue's concurrency limit, cooldown, and retry/backoff
+    // instead of running the full AI pipeline inline on the API process.
     await this.prisma.errorEvent.update({
       where: { id: errorEventId },
       data: { status: ErrorStatus.QUEUED },
     });
 
-    // Trigger pipeline (this will run asynchronously)
-    this.pipelineService.run(errorEventId).catch((error) => {
-      this.logger.error(`[retryFix] Pipeline failed for error ${errorEventId}: ${error.message}`);
-    });
+    await this.pipelineQueue.add('process-error', { errorEventId });
 
     return { message: 'Fix retry initiated' };
   }
