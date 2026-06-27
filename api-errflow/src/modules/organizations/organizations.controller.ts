@@ -1,7 +1,6 @@
 import { Controller, Get, Patch, Delete, Body, UseGuards } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
-import { UpdatePlanDto } from './dto/update-plan.dto';
 import { DeleteOrganizationDto } from './dto/delete-organization.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -31,22 +30,17 @@ export class OrganizationsController {
     return this.organizationsService.getUsage(organizationId);
   }
 
-  @Patch('plan')
-  @UseGuards(RolesGuard)
-  @Roles('OWNER', 'ADMIN')
-  async updatePlan(
-    @CurrentUser('organizationId') organizationId: string,
-    @Body() updateDto: UpdatePlanDto,
-  ) {
-    return this.organizationsService.updatePlan(organizationId, updateDto);
-  }
+  // Plan changes are an administrative/billing action and are handled by the
+  // admin surface (POST /admin/organizations/:id/plan, SuperAdmin-gated). There
+  // is intentionally no tenant-facing plan-change endpoint: without a payment
+  // flow it would let any org owner grant themselves a higher plan for free.
 
   @Delete()
   @UseGuards(RolesGuard)
   @Roles('OWNER')
   async remove(
     @CurrentUser('organizationId') organizationId: string,
-    @CurrentUser('userId') userId: string,
+    @CurrentUser('id') userId: string,
     @Body() deleteDto: DeleteOrganizationDto,
   ) {
     return this.organizationsService.remove(organizationId, userId, deleteDto);

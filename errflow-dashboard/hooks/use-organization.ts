@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/api"
-import { Organization, OrganizationUsage, UpdatePlanRequest } from "@/types"
+import { Organization, OrganizationUsage } from "@/types"
 
 export function useOrganization() {
   return useQuery({
@@ -23,18 +23,6 @@ export function useUpdateOrganization() {
     mutationFn: (data: { name: string }) => api.patch<Organization>("/organization", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["organization"] })
-    },
-  })
-}
-
-export function useUpdatePlan() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: UpdatePlanRequest) => api.patch<Organization>("/organization/plan", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organization"] })
-      queryClient.invalidateQueries({ queryKey: ["organization", "usage"] })
     },
   })
 }

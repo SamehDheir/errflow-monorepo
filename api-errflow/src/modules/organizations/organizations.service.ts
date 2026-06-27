@@ -1,7 +1,11 @@
-import { Injectable, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
-import { UpdatePlanDto } from './dto/update-plan.dto';
 import { DeleteOrganizationDto } from './dto/delete-organization.dto';
 import * as bcrypt from 'bcrypt';
 
@@ -23,7 +27,7 @@ export class OrganizationsService {
     });
 
     if (!organization) {
-      throw new Error('Organization not found');
+      throw new NotFoundException('Organization not found');
     }
 
     return {
@@ -44,7 +48,7 @@ export class OrganizationsService {
     });
 
     if (!organization) {
-      throw new Error('Organization not found');
+      throw new NotFoundException('Organization not found');
     }
 
     const updated = await this.prisma.organization.update({
@@ -67,7 +71,7 @@ export class OrganizationsService {
     });
 
     if (!organization) {
-      throw new Error('Organization not found');
+      throw new NotFoundException('Organization not found');
     }
 
     const now = new Date();
@@ -87,39 +91,6 @@ export class OrganizationsService {
       billingCycleStart: startOfMonth.toISOString().split('T')[0],
       billingCycleEnd: endOfMonth.toISOString().split('T')[0],
       daysRemaining,
-    };
-  }
-
-  async updatePlan(organizationId: string, updateDto: UpdatePlanDto) {
-    const organization = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
-    });
-
-    if (!organization) {
-      throw new Error('Organization not found');
-    }
-
-    const planLimits: Record<string, number> = {
-      FREE: 10,
-      PRO: 100,
-      ENTERPRISE: 999999,
-    };
-
-    const newFixesLimit = planLimits[updateDto.plan];
-
-    const updated = await this.prisma.organization.update({
-      where: { id: organizationId },
-      data: {
-        plan: updateDto.plan as any,
-        fixesLimit: newFixesLimit,
-      },
-    });
-
-    return {
-      id: updated.id,
-      name: updated.name,
-      plan: updated.plan,
-      fixesLimit: updated.fixesLimit,
     };
   }
 
@@ -183,66 +154,38 @@ export class OrganizationsService {
       },
     });
 
-    // Archive organization data before deletion (soft delete approach)
-    const deletionRecord = await this.prisma.deletionLog.create({
-      data: {
-        organizationId: organization.id,
-        organizationName: organization.name,
-        deletedBy: userId,
-        deletedAt: new Date(),
-        stats: {
-          users: stats?._count.users || 0,
-          projects: stats?._count.projects || 0,
-          apiKeys: stats?._count.apiKeys || 0,
-          errorEvents: stats?._count.errorEvents || 0,
-          pullRequests: stats?._count.pullRequests || 0,
-        },
-      },
-    });
-
-    // Delete all related data in a transaction with timeout
-    await this.prisma.$transaction(
+    // Delete all related data — and write the audit record — atomically, so a
+    // failed delete can never leave an orphan "deleted" log behind.
+    const deletionRecord = await this.prisma.$transaction(
       async (tx) => {
+        // Archive organization data before deletion (audit trail)
+        const record = await tx.deletionLog.create({
+          data: {
+            organizationId: organization.id,
+            organizationName: organization.name,
+            deletedBy: userId,
+            deletedAt: new Date(),
+            stats: {
+              users: stats?._count.users || 0,
+              projects: stats?._count.projects || 0,
+              apiKeys: stats?._count.apiKeys || 0,
+              errorEvents: stats?._count.errorEvents || 0,
+              pullRequests: stats?._count.pullRequests || 0,
+            },
+          },
+        });
+
         // Delete in correct order to respect foreign keys
-        // 1. Delete pull requests
-        await tx.pullRequest.deleteMany({
-          where: { organizationId },
-        });
+        await tx.pullRequest.deleteMany({ where: { organizationId } });
+        await tx.notification.deleteMany({ where: { organizationId } });
+        await tx.fixAttempt.deleteMany({ where: { organizationId } });
+        await tx.errorEvent.deleteMany({ where: { organizationId } });
+        await tx.project.deleteMany({ where: { organizationId } });
+        await tx.apiKey.deleteMany({ where: { organizationId } });
+        await tx.user.deleteMany({ where: { organizationId } });
+        await tx.organization.delete({ where: { id: organizationId } });
 
-        // 2. Delete notifications
-        await tx.notification.deleteMany({
-          where: { organizationId },
-        });
-
-        // 3. Delete fix attempts
-        await tx.fixAttempt.deleteMany({
-          where: { organizationId },
-        });
-
-        // 4. Delete error events
-        await tx.errorEvent.deleteMany({
-          where: { organizationId },
-        });
-
-        // 5. Delete projects
-        await tx.project.deleteMany({
-          where: { organizationId },
-        });
-
-        // 6. Delete API keys
-        await tx.apiKey.deleteMany({
-          where: { organizationId },
-        });
-
-        // 7. Delete users (cascade will handle this, but explicit is safer)
-        await tx.user.deleteMany({
-          where: { organizationId },
-        });
-
-        // 8. Finally delete the organization
-        await tx.organization.delete({
-          where: { id: organizationId },
-        });
+        return record;
       },
       {
         timeout: 30000, // 30 seconds timeout for large organizations
