@@ -1,6 +1,7 @@
 import { sendError } from './sender';
 import { getConfig, isDisabled } from './config/env';
 import { collectErrorContext, SeverityHints } from './context';
+import { logger } from './logger';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -162,7 +163,7 @@ export async function captureError(
   hints: SeverityHints = {},
 ): Promise<void> {
   if (isDisabled()) {
-    console.log('[errflow] Disabled, skipping error capture');
+    logger.log('Disabled, skipping error capture');
     return;
   }
 
@@ -176,15 +177,15 @@ export async function captureError(
     level: 'error',
   });
 
-  console.log('[errflow] Error captured:', error.message);
+  logger.log('Error captured:', error.message);
 
   try {
     const payload = buildPayload(error, fingerprint, hints, metadata);
     await sendError(payload);
-    console.log('[errflow] Sent successfully');
+    logger.log('Sent successfully');
   } catch (err) {
-    console.error(
-      '[errflow] Failed to send:',
+    logger.error(
+      'Failed to send:',
       err instanceof Error ? err.message : String(err),
     );
   }
@@ -197,7 +198,7 @@ export function attachGlobalListeners(): void {
   listenersAttached = true;
 
   process.on('uncaughtException', (error: Error) => {
-    console.error('[errflow] Uncaught exception:', error.message);
+    logger.error('Uncaught exception:', error.message);
     process.exitCode = 1;
     captureError(error)
       .catch(() => {})
@@ -206,7 +207,7 @@ export function attachGlobalListeners(): void {
 
   process.on('unhandledRejection', (reason: unknown) => {
     const error = reason instanceof Error ? reason : new Error(String(reason));
-    console.error('[errflow] Unhandled rejection:', error.message);
+    logger.error('Unhandled rejection:', error.message);
     captureError(error).catch(() => {});
   });
 }

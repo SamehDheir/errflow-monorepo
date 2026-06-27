@@ -30,6 +30,11 @@ const envSchema = z.object({
     .optional()
     .default('false')
     .transform((val) => val === 'true'),
+  ERRFLOW_DEBUG: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((val) => val === 'true'),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -60,6 +65,7 @@ export function setConfig(config: {
   apiUrl?: string;
   disabled?: boolean;
   includeMemory?: boolean;
+  debug?: boolean;
 }): void {
   // Validate apiUrl if provided
   if (config.apiUrl) {
@@ -80,6 +86,7 @@ export function setConfig(config: {
     ERRFLOW_API_URL: config.apiUrl || 'https://api.errflow.dev/api/ingest',
     ERRFLOW_DISABLED: config.disabled ?? false,
     ERRFLOW_INCLUDE_MEMORY: config.includeMemory ?? false,
+    ERRFLOW_DEBUG: config.debug ?? false,
   };
 }
 

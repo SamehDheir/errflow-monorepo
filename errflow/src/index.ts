@@ -20,6 +20,8 @@ export interface ErrflowConfig {
   disabled?: boolean;
   /** Include process.memoryUsage() in each payload. Off by default. */
   includeMemory?: boolean;
+  /** Emit internal `[errflow]` logs to the console. Off by default. */
+  debug?: boolean;
 }
 
 export type { Breadcrumb, RequestContext, SeverityHints };
@@ -58,7 +60,6 @@ export class Errflow {
     hints?: SeverityHints,
   ): Promise<void> {
     if (isDisabled()) {
-      console.log('[errflow] Disabled, skipping error capture');
       return;
     }
     await captureError(error, metadata, hints);

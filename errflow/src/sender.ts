@@ -1,4 +1,5 @@
 import { getConfig } from './config/env';
+import { logger } from './logger';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -167,7 +168,7 @@ async function sendWithRetry(payload: ErrorPayload): Promise<void> {
       );
 
       if (response.ok) {
-        console.log(`[errflow] Sent successfully on attempt ${attempt + 1}`);
+        logger.log(`Sent successfully on attempt ${attempt + 1}`);
         return;
       }
 
@@ -179,7 +180,7 @@ async function sendWithRetry(payload: ErrorPayload): Promise<void> {
       }
 
       lastError = `HTTP ${response.status}`;
-      console.warn(`[errflow] Attempt ${attempt + 1} failed: ${lastError}`);
+      logger.warn(`Attempt ${attempt + 1} failed: ${lastError}`);
     } catch (error) {
       // Re-throw non-retryable errors immediately
       if (
@@ -190,7 +191,7 @@ async function sendWithRetry(payload: ErrorPayload): Promise<void> {
       }
 
       lastError = error instanceof Error ? error.message : String(error);
-      console.warn(`[errflow] Attempt ${attempt + 1} failed:`, lastError);
+      logger.warn(`Attempt ${attempt + 1} failed:`, lastError);
     }
 
     if (attempt < MAX_RETRIES - 1) {

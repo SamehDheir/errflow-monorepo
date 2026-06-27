@@ -141,6 +141,7 @@ Errflow.init({
   apiUrl: 'https://api.errflow.dev/api/ingest', // default: https://api.errflow.dev/api/ingest
   disabled: false,              // default: false
   includeMemory: false,         // default: false — opt-in memory usage in payload
+  debug: false,                 // default: false — emit internal [errflow] logs
 });
 ```
 
@@ -153,6 +154,7 @@ Errflow.init({
 | `ERRFLOW_API_URL` | No | `https://api.errflow.dev/api/ingest` |
 | `ERRFLOW_DISABLED` | No | `false` |
 | `ERRFLOW_INCLUDE_MEMORY` | No | `false` |
+| `ERRFLOW_DEBUG` | No | `false` |
 
 > `Errflow.init()` takes priority over environment variables.
 
