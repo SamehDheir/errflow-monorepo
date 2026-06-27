@@ -8,7 +8,7 @@ const envSchema = z.object({
   ERRFLOW_ENV: z.string().default('production'),
   ERRFLOW_API_URL: z
     .string()
-    .default('https://api.errflow.dev/ingest')
+    .default('https://api.errflow.dev/api/ingest')
     .refine(
       (url) => {
         try {
@@ -77,7 +77,7 @@ export function setConfig(config: {
   cachedConfig = {
     ERRFLOW_API_KEY: config.apiKey.trim(),
     ERRFLOW_ENV: config.env || 'production',
-    ERRFLOW_API_URL: config.apiUrl || 'https://api.errflow.dev/ingest',
+    ERRFLOW_API_URL: config.apiUrl || 'https://api.errflow.dev/api/ingest',
     ERRFLOW_DISABLED: config.disabled ?? false,
     ERRFLOW_INCLUDE_MEMORY: config.includeMemory ?? false,
   };

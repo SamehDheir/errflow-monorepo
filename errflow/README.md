@@ -138,7 +138,7 @@ If the error reappears, the payload will contain `isRegression: true` — giving
 Errflow.init({
   apiKey: 'live_xxxxxxxx',      // required
   env: 'staging',               // default: 'production'
-  apiUrl: 'https://api.errflow.dev/ingest', // default: https://api.errflow.dev/ingest
+  apiUrl: 'https://api.errflow.dev/api/ingest', // default: https://api.errflow.dev/api/ingest
   disabled: false,              // default: false
   includeMemory: false,         // default: false — opt-in memory usage in payload
 });
@@ -150,7 +150,7 @@ Errflow.init({
 |----------|----------|---------|
 | `ERRFLOW_API_KEY` | **Yes** | — |
 | `ERRFLOW_ENV` | No | `production` |
-| `ERRFLOW_API_URL` | No | `https://api.errflow.dev/ingest` |
+| `ERRFLOW_API_URL` | No | `https://api.errflow.dev/api/ingest` |
 | `ERRFLOW_DISABLED` | No | `false` |
 | `ERRFLOW_INCLUDE_MEMORY` | No | `false` |
 
