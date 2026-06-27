@@ -11,6 +11,8 @@ import {
 } from './monitor';
 import { markResolved } from './context';
 import type { Breadcrumb, RequestContext, SeverityHints } from './monitor';
+import type { ErrorPayload } from './sender';
+import type { BeforeSendHook } from './config/env';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -23,9 +25,15 @@ export interface ErrflowConfig {
   includeMemory?: boolean;
   /** Emit internal `[errflow]` logs to the console. Off by default. */
   debug?: boolean;
+  /**
+   * Called with the final payload right before sending. Return a modified
+   * payload to change what's sent, or `null`/`undefined` to drop the event.
+   * Runs after built-in secret redaction.
+   */
+  beforeSend?: BeforeSendHook;
 }
 
-export type { Breadcrumb, RequestContext, SeverityHints };
+export type { Breadcrumb, RequestContext, SeverityHints, ErrorPayload, BeforeSendHook };
 
 // ─── SDK ──────────────────────────────────────────────────────────────────────
 

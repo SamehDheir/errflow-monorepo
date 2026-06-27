@@ -1,7 +1,8 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { sendError } from './sender';
-import { getConfig, isDisabled } from './config/env';
+import { getConfig, isDisabled, getBeforeSend } from './config/env';
 import { collectErrorContext, SeverityHints } from './context';
+import { redactString } from './redact';
 import { logger } from './logger';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -150,6 +151,18 @@ async function buildPayload(
   const config = getConfig();
   const errorContext = await collectErrorContext(error, fingerprint, hints);
 
+  // Mask secrets in auto-collected content before it leaves the machine.
+  const codeContext = errorContext.codeContext.map((ctx) => ({
+    ...ctx,
+    snippet: ctx.snippet.map((line) => ({
+      ...line,
+      content: redactString(line.content),
+    })),
+  }));
+  const recentDiff = errorContext.recentDiff
+    ? { ...errorContext.recentDiff, diff: redactString(errorContext.recentDiff.diff) }
+    : null;
+
   return {
     // ── Identity ──────────────────────────────────────────────────────────────
     fingerprint,
@@ -163,9 +176,9 @@ async function buildPayload(
     isRegression: errorContext.isRegression,
 
     // ── AI Fix Context ────────────────────────────────────────────────────────
-    codeContext: errorContext.codeContext,
+    codeContext,
     gitBlame: errorContext.gitBlame,
-    recentDiff: errorContext.recentDiff,
+    recentDiff,
 
     // ── Request ───────────────────────────────────────────────────────────────
     request: getRequestContext() ?? undefined,
@@ -215,7 +228,20 @@ export async function captureError(
 
   try {
     const payload = await buildPayload(error, fingerprint, hints, metadata);
-    await sendError(payload);
+
+    // Give the host app a final chance to redact or drop the event.
+    const beforeSend = getBeforeSend();
+    if (beforeSend) {
+      const result = beforeSend(payload);
+      if (!result) {
+        logger.log('Event dropped by beforeSend hook');
+        return;
+      }
+      await sendError(result);
+    } else {
+      await sendError(payload);
+    }
+
     logger.log('Sent successfully');
   } catch (err) {
     logger.error(

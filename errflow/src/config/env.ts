@@ -1,4 +1,20 @@
 import { z } from 'zod';
+import type { ErrorPayload } from '../sender';
+
+/**
+ * Hook called with the fully-built payload right before it is sent. Return a
+ * modified payload to change what's sent, or `null`/`undefined` to drop the
+ * event entirely. Useful for redaction beyond the built-in defaults.
+ */
+export type BeforeSendHook = (
+  payload: ErrorPayload,
+) => ErrorPayload | null | undefined;
+
+let beforeSendHook: BeforeSendHook | null = null;
+
+export function getBeforeSend(): BeforeSendHook | null {
+  return beforeSendHook;
+}
 
 const envSchema = z.object({
   ERRFLOW_API_KEY: z.string().min(1, 'ERRFLOW_API_KEY is required'),
@@ -63,6 +79,7 @@ export function setConfig(config: {
   disabled?: boolean;
   includeMemory?: boolean;
   debug?: boolean;
+  beforeSend?: BeforeSendHook;
 }): void {
   // Validate apiUrl if provided
   if (config.apiUrl) {
@@ -85,6 +102,8 @@ export function setConfig(config: {
     ERRFLOW_INCLUDE_MEMORY: config.includeMemory ?? false,
     ERRFLOW_DEBUG: config.debug ?? false,
   };
+
+  beforeSendHook = config.beforeSend ?? null;
 }
 
 export function getConfig(): Env {
@@ -100,4 +119,5 @@ export function isDisabled(): boolean {
 
 export function resetConfig(): void {
   cachedConfig = null;
+  beforeSendHook = null;
 }

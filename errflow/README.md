@@ -165,6 +165,33 @@ Errflow.init({
 
 ---
 
+## Redacting sensitive data
+
+Errflow automatically masks common secrets (API keys, bearer tokens, JWTs,
+provider keys, and `key = value` assignments for sensitive-looking keys) in the
+code snippets and git diffs it collects, replacing them with `[REDACTED]`.
+
+For anything domain-specific, use the `beforeSend` hook. It receives the final
+payload and can modify it, or return `null` to drop the event entirely:
+
+```typescript
+Errflow.init({
+  apiKey: 'live_xxxxxxxx',
+  beforeSend: (payload) => {
+    // Drop errors from health-check noise
+    if (payload.request?.url === '/healthz') return null;
+
+    // Strip a custom secret from metadata
+    if (payload.metadata?.internalToken) {
+      payload.metadata.internalToken = '[REDACTED]';
+    }
+    return payload;
+  },
+});
+```
+
+---
+
 ## API Reference
 
 ### `Errflow.init(config)`
