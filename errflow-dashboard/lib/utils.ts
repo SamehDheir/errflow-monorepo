@@ -32,6 +32,17 @@ export function formatRelativeTime(date: Date | string | number): string {
 }
 
 
+export function formatDateTime(date: Date | string | number): string {
+  try {
+    const d = typeof date === 'string' || typeof date === 'number' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return 'N/A';
+    return d.toLocaleString();
+  } catch {
+    return 'Invalid Date';
+  }
+}
+
+
 export function truncate(str: string | null | undefined, length: number): string {
   if (!str) return '';
   return str.length > length ? str.substring(0, length) + "..." : str;

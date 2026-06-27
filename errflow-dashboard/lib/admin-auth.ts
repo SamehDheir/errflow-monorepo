@@ -196,7 +196,7 @@ export const getAdminUser = (): AdminUser | null => {
 
 export const getAdminToken = (): string | null => {
   if (typeof window === "undefined") return null;
-  return getAdminUser() ? "cookie-authenticated" : null;
+  return localStorage.getItem("adminAccessToken");
 };
 
 export const isAdminAuthenticated = (): boolean => {
