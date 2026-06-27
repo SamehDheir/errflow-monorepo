@@ -141,14 +141,14 @@ function shouldSendError(fingerprint: string): boolean {
 
 // ─── Payload ──────────────────────────────────────────────────────────────────
 
-function buildPayload(
+async function buildPayload(
   error: Error,
   fingerprint: string,
   hints: SeverityHints,
   metadata?: Record<string, unknown>,
 ) {
   const config = getConfig();
-  const errorContext = collectErrorContext(error, fingerprint, hints);
+  const errorContext = await collectErrorContext(error, fingerprint, hints);
 
   return {
     // ── Identity ──────────────────────────────────────────────────────────────
@@ -214,7 +214,7 @@ export async function captureError(
   logger.log('Error captured:', error.message);
 
   try {
-    const payload = buildPayload(error, fingerprint, hints, metadata);
+    const payload = await buildPayload(error, fingerprint, hints, metadata);
     await sendError(payload);
     logger.log('Sent successfully');
   } catch (err) {

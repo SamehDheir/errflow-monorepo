@@ -1,6 +1,9 @@
-import { execSync } from 'child_process';
-import { readFileSync, existsSync } from 'fs';
+import { execFile } from 'child_process';
+import { readFile, access } from 'fs/promises';
 import { resolve } from 'path';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -89,28 +92,44 @@ export function parseStackFrames(stack: string): StackFrame[] {
   return frames;
 }
 
-function isAppFrame(frame: StackFrame): boolean {
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Cheap path-only heuristic; existence is checked separately (async). */
+function isLikelyAppFrame(frame: StackFrame): boolean {
   return (
-    !frame.file.includes('node_modules') &&
-    !frame.file.startsWith('node:') &&
-    existsSync(frame.file)
+    !frame.file.includes('node_modules') && !frame.file.startsWith('node:')
   );
+}
+
+/** First stack frame that looks like app code and exists on disk. */
+async function findAppFrame(frames: StackFrame[]): Promise<StackFrame | null> {
+  for (const frame of frames) {
+    if (isLikelyAppFrame(frame) && (await fileExists(frame.file))) {
+      return frame;
+    }
+  }
+  return null;
 }
 
 // ─── Code Snippets ────────────────────────────────────────────────────────────
 
 const SNIPPET_RADIUS = 5; // lines above and below the error line
 
-function readCodeSnippet(
+async function readCodeSnippet(
   filePath: string,
   errorLine: number,
   radius = SNIPPET_RADIUS,
-): SnippetLine[] {
+): Promise<SnippetLine[]> {
   try {
     const absolutePath = resolve(filePath);
-    if (!existsSync(absolutePath)) return [];
-
-    const lines = readFileSync(absolutePath, 'utf8').split('\n');
+    const lines = (await readFile(absolutePath, 'utf8')).split('\n');
     const start = Math.max(0, errorLine - radius - 1);
     const end = Math.min(lines.length, errorLine + radius);
 
@@ -124,29 +143,39 @@ function readCodeSnippet(
   }
 }
 
-export function extractCodeContext(stack: string): CodeContext[] {
-  const frames = parseStackFrames(stack);
+export async function extractCodeContext(stack: string): Promise<CodeContext[]> {
+  const frames = parseStackFrames(stack).filter(isLikelyAppFrame);
+  const result: CodeContext[] = [];
 
-  return frames
-    .filter(isAppFrame)
-    .slice(0, 3) // top 3 app frames is enough context for AI
-    .map((frame) => ({
+  for (const frame of frames) {
+    if (result.length >= 3) break; // top 3 app frames is enough context for AI
+    if (!(await fileExists(frame.file))) continue;
+    result.push({
       file: frame.file,
       line: frame.line,
       functionName: frame.functionName,
-      snippet: readCodeSnippet(frame.file, frame.line),
-    }));
+      snippet: await readCodeSnippet(frame.file, frame.line),
+    });
+  }
+
+  return result;
 }
 
 // ─── Git Blame ────────────────────────────────────────────────────────────────
 
-function runGit(cmd: string): string | null {
+/**
+ * Runs a git command via execFile (no shell), so file paths taken from stack
+ * traces can't be interpreted as shell metacharacters. Returns null on any
+ * failure (not a repo, git missing, timeout, etc.).
+ */
+async function runGit(args: string[]): Promise<string | null> {
   try {
-    return execSync(cmd, {
+    const { stdout } = await execFileAsync('git', args, {
       encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 5_000,
-    }).trim();
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    return stdout.trim();
   } catch {
     return null;
   }
@@ -156,14 +185,17 @@ function runGit(cmd: string): string | null {
  * Returns blame info for the first app stack frame.
  * Useful for the AI and dashboard to surface who last touched the broken code.
  */
-export function getGitBlame(stack: string): GitBlame | null {
-  const frames = parseStackFrames(stack);
-  const appFrame = frames.find(isAppFrame);
+export async function getGitBlame(stack: string): Promise<GitBlame | null> {
+  const appFrame = await findAppFrame(parseStackFrames(stack));
   if (!appFrame) return null;
 
-  const raw = runGit(
-    `git blame -L ${appFrame.line},${appFrame.line} --porcelain "${appFrame.file}"`,
-  );
+  const raw = await runGit([
+    'blame',
+    '-L',
+    `${appFrame.line},${appFrame.line}`,
+    '--porcelain',
+    appFrame.file,
+  ]);
   if (!raw) return null;
 
   try {
@@ -190,22 +222,29 @@ const MAX_DIFF_CHARS = 4_000; // cap to avoid huge payloads
  * Returns the most recent commit diff for the file where the error originated.
  * Gives the AI a clear picture of what changed and potentially introduced the bug.
  */
-export function getRecentDiff(stack: string): GitDiff | null {
-  const frames = parseStackFrames(stack);
-  const appFrame = frames.find(isAppFrame);
+export async function getRecentDiff(stack: string): Promise<GitDiff | null> {
+  const appFrame = await findAppFrame(parseStackFrames(stack));
   if (!appFrame) return null;
 
-  const logLine = runGit(
-    `git log -1 --format="%H|%s|%an|%aI" -- "${appFrame.file}"`,
-  );
+  const logLine = await runGit([
+    'log',
+    '-1',
+    '--format=%H|%s|%an|%aI',
+    '--',
+    appFrame.file,
+  ]);
   if (!logLine) return null;
 
   const [commitHash, commitMessage, author, committedAt] = logLine.split('|');
   if (!commitHash) return null;
 
-  const rawDiff = runGit(
-    `git show ${commitHash} --unified=3 -- "${appFrame.file}"`,
-  );
+  const rawDiff = await runGit([
+    'show',
+    commitHash,
+    '--unified=3',
+    '--',
+    appFrame.file,
+  ]);
 
   const diff = rawDiff
     ? rawDiff.length > MAX_DIFF_CHARS
@@ -268,18 +307,25 @@ export function checkRegression(fingerprint: string): {
 /**
  * Collects all AI-useful context for a given error in one call.
  */
-export function collectErrorContext(
+export async function collectErrorContext(
   error: Error,
   fingerprint: string,
   hints: SeverityHints = {},
-): ErrorContext {
+): Promise<ErrorContext> {
   const stack = error.stack ?? '';
   const regression = checkRegression(fingerprint);
 
+  // The three collectors are independent — run them concurrently.
+  const [codeContext, gitBlame, recentDiff] = await Promise.all([
+    extractCodeContext(stack),
+    getGitBlame(stack),
+    getRecentDiff(stack),
+  ]);
+
   return {
-    codeContext: extractCodeContext(stack),
-    gitBlame: getGitBlame(stack),
-    recentDiff: getRecentDiff(stack),
+    codeContext,
+    gitBlame,
+    recentDiff,
     severity: calculateSeverity(error, hints),
     isRegression: regression.isRegression,
   };
