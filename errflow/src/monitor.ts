@@ -10,6 +10,9 @@ import { logger } from './logger';
 const DEBOUNCE_MS = 60_000;
 const MAX_CACHE_SIZE = 1_000;
 const MAX_BREADCRUMBS = 50;
+// On a fatal uncaughtException, don't let the full send-retry sequence (~21s)
+// delay process exit — give the flush this long, then exit regardless.
+const FATAL_FLUSH_TIMEOUT_MS = 3_000;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -260,9 +263,14 @@ export function attachGlobalListeners(): void {
   process.on('uncaughtException', (error: Error) => {
     logger.error('Uncaught exception:', error.message);
     process.exitCode = 1;
-    captureError(error)
-      .catch(() => {})
-      .finally(() => process.exit(1));
+
+    const flush = captureError(error).catch(() => {});
+    const timeout = new Promise<void>((resolve) => {
+      // unref so this timer alone never keeps the process alive
+      setTimeout(resolve, FATAL_FLUSH_TIMEOUT_MS).unref();
+    });
+
+    Promise.race([flush, timeout]).finally(() => process.exit(1));
   });
 
   process.on('unhandledRejection', (reason: unknown) => {
