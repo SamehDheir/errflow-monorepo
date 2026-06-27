@@ -15,6 +15,13 @@ export class CryptoService {
       throw new Error('ENCRYPTION_KEY is not configured');
     }
     this.key = Buffer.from(encryptionKey, 'hex');
+    // aes-256-gcm needs a 32-byte key — fail fast at boot rather than on the
+    // first encrypt() call with a confusing low-level crypto error.
+    if (this.key.length !== 32) {
+      throw new Error(
+        'ENCRYPTION_KEY must be 32 bytes / 64 hex characters (openssl rand -hex 32)',
+      );
+    }
   }
 
   encrypt(text: string): { encrypted: string; iv: string; keyVersion: number } {
@@ -36,7 +43,11 @@ export class CryptoService {
   decrypt(encrypted: string, iv: string): string {
     const encryptedBuffer = Buffer.from(encrypted, 'base64');
     const ivBuffer = Buffer.from(iv, 'base64');
-    
+
+    if (encryptedBuffer.length <= this.authTagLength) {
+      throw new Error('Invalid encrypted payload');
+    }
+
     const authTag = encryptedBuffer.slice(-this.authTagLength);
     const ciphertext = encryptedBuffer.slice(0, -this.authTagLength);
     
