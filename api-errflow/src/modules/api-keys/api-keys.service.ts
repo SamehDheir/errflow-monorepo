@@ -159,10 +159,19 @@ export class ApiKeysService {
       return null;
     }
 
-    await this.prisma.apiKey.update({
-      where: { id: apiKey.id },
-      data: { lastUsedAt: new Date() },
-    });
+    // Throttle the lastUsedAt write to at most once per 5 minutes, and don't
+    // block ingest on it — this runs on the hot path (up to 60 req/min/key).
+    const FIVE_MINUTES_MS = 5 * 60 * 1000;
+    if (
+      !apiKey.lastUsedAt ||
+      Date.now() - apiKey.lastUsedAt.getTime() > FIVE_MINUTES_MS
+    ) {
+      this.prisma.apiKey
+        .update({ where: { id: apiKey.id }, data: { lastUsedAt: new Date() } })
+        .catch(() => {
+          /* best-effort timestamp; never fail validation on it */
+        });
+    }
 
     return {
       apiKey: {
