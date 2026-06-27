@@ -1,5 +1,6 @@
 import { getConfig } from './config/env';
 import { logger } from './logger';
+import { VERSION } from './version';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -153,7 +154,7 @@ async function sendWithRetry(payload: ErrorPayload): Promise<void> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Errflow-Key': config.ERRFLOW_API_KEY,
-    'User-Agent': `errflow/1.0.0 (node/${process.version})`,
+    'User-Agent': `errflow/${VERSION} (node/${process.version})`,
   };
 
   const body = JSON.stringify(payload);

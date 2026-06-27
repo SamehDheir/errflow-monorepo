@@ -1,4 +1,5 @@
 import { defineConfig } from 'tsup';
+import { version } from './package.json';
 
 export default defineConfig({
   entry: ['src/index.ts', 'src/monitor.ts'],
@@ -8,4 +9,7 @@ export default defineConfig({
   sourcemap: true,
   target: 'node18',
   external: ['zod'],
+  define: {
+    __PACKAGE_VERSION__: JSON.stringify(version),
+  },
 });
