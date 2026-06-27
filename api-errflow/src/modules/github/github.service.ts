@@ -1,4 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ForbiddenException,
+  BadGatewayException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Octokit } from '@octokit/rest';
 import { WebsocketService } from '../../websockets/websocket.service';
@@ -52,7 +58,10 @@ export class GitHubService {
     private configService: ConfigService,
     private websocketService: WebsocketService,
   ) {
-    this.prLabels = (this.configService.get<string>('GITHUB_PR_LABELS') || 'autopr,automated').split(',');
+    this.prLabels = (this.configService.get<string>('GITHUB_PR_LABELS') || 'autopr,automated')
+      .split(',')
+      .map((l) => l.trim())
+      .filter(Boolean);
   }
 
   private createOctokit(token: string): Octokit {
@@ -87,10 +96,10 @@ export class GitHubService {
       this.logger.error(`GitHub API error: ${error.status} - ${error.message}`);
       this.logger.error(`Attempted: ${owner}/${repo}/${filePath}@${branch}`);
       if (error.status === 404) {
-        throw new Error(`File not found in repository: ${filePath}`);
+        throw new NotFoundException(`File not found in repository: ${filePath}`);
       }
       if (error.status === 403) {
-        throw new Error(`Access denied to repository: ${owner}/${repo}`);
+        throw new ForbiddenException(`Access denied to repository: ${owner}/${repo}`);
       }
       throw error;
     }
@@ -155,8 +164,24 @@ export class GitHubService {
       body: params.body,
       head: params.head,
       base: params.base,
-      labels: this.prLabels,
     });
+
+    // The Pulls "create" endpoint ignores a `labels` field — labels must be
+    // applied to the PR as an issue afterwards. Don't fail the PR if this does.
+    if (this.prLabels.length > 0) {
+      try {
+        await octokit.rest.issues.addLabels({
+          owner: params.owner,
+          repo: params.repo,
+          issue_number: response.data.number,
+          labels: this.prLabels,
+        });
+      } catch (error: any) {
+        this.logger.warn(
+          `PR #${response.data.number} created but labelling failed: ${error.message}`,
+        );
+      }
+    }
 
     return {
       prNumber: response.data.number,
@@ -263,7 +288,7 @@ export class GitHubService {
       }));
     } catch (error: any) {
       this.logger.error(`Failed to fetch user repositories: ${error.status} - ${error.message}`);
-      throw new Error('Failed to fetch repositories from GitHub');
+      throw new BadGatewayException('Failed to fetch repositories from GitHub');
     }
   }
 }
