@@ -1,7 +1,4 @@
 import { z } from 'zod';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const envSchema = z.object({
   ERRFLOW_API_KEY: z.string().min(1, 'ERRFLOW_API_KEY is required'),

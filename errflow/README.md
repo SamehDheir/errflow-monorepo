@@ -157,6 +157,11 @@ Errflow.init({
 | `ERRFLOW_DEBUG` | No | `false` |
 
 > `Errflow.init()` takes priority over environment variables.
+>
+> Errflow reads from `process.env` but does **not** load `.env` files itself.
+> If you rely on the environment-variable config, make sure your app loads its
+> own `.env` (e.g. `import 'dotenv/config'` or `node --env-file=.env`) before
+> the SDK is initialised.
 
 ---
 
