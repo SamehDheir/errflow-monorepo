@@ -1,4 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QueryErrorsDto } from './dto/query-errors.dto';
 import { ErrorStatus, FixStatus } from '@prisma/client';
@@ -18,6 +23,23 @@ export class ErrorsService {
     private notificationsService: NotificationsService,
     private cryptoService: CryptoService,
   ) {}
+
+  /**
+   * Json columns are returned as objects by Prisma, but legacy rows were
+   * written double-encoded (a JSON string). Accept both so file/line resolve
+   * for old and new rows alike.
+   */
+  private toObject(value: unknown): any {
+    if (!value) return {};
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return {};
+      }
+    }
+    return value;
+  }
 
   async findAll(organizationId: string, query: QueryErrorsDto) {
     const { page = 1, limit = 20, status, severity, projectId } = query;
@@ -67,16 +89,16 @@ export class ErrorsService {
 
     // Map fields to match frontend expectations
     const mappedData = data.map(errorEvent => {
-      const runtime = errorEvent.runtime as any;
-      const metadata = errorEvent.metadata as any;
-      
+      const runtime = this.toObject(errorEvent.runtime);
+      const metadata = this.toObject(errorEvent.metadata);
+
       return {
         ...errorEvent,
         occurrences: errorEvent.occurrenceCount,
         firstSeen: errorEvent.firstSeenAt.toISOString(),
         lastSeen: errorEvent.lastSeenAt.toISOString(),
-        file: runtime?.stacktrace?.[0]?.file || metadata?.file || runtime?.file || 'unknown',
-        line: runtime?.stacktrace?.[0]?.line || metadata?.line || runtime?.line || 0,
+        file: runtime.primaryFile || metadata.file || runtime.file || 'unknown',
+        line: runtime.primaryLine ?? metadata.line ?? runtime.line ?? 0,
         fixAttempts: errorEvent.fixAttempts.map(fixAttempt => ({
           ...fixAttempt,
           confidence: fixAttempt.confidenceScore ? Math.round(fixAttempt.confidenceScore * 100) : null,
@@ -123,20 +145,20 @@ export class ErrorsService {
     });
 
     if (!errorEvent) {
-      throw new Error('Error event not found');
+      throw new NotFoundException('Error event not found');
     }
 
     // Map PullRequest fields to match frontend expectations
-    const runtime = errorEvent.runtime as any;
-    const metadata = errorEvent.metadata as any;
-    
+    const runtime = this.toObject(errorEvent.runtime);
+    const metadata = this.toObject(errorEvent.metadata);
+
     const mappedErrorEvent = {
       ...errorEvent,
       occurrences: errorEvent.occurrenceCount,
       firstSeen: errorEvent.firstSeenAt.toISOString(),
       lastSeen: errorEvent.lastSeenAt.toISOString(),
-      file: runtime?.stacktrace?.[0]?.file || metadata?.file || runtime?.file || 'unknown',
-      line: runtime?.stacktrace?.[0]?.line || metadata?.line || runtime?.line || 0,
+      file: runtime.primaryFile || metadata.file || runtime.file || 'unknown',
+      line: runtime.primaryLine ?? metadata.line ?? runtime.line ?? 0,
       fixAttempts: errorEvent.fixAttempts.map((fixAttempt: any) => ({
         ...fixAttempt,
         confidence: fixAttempt.confidenceScore ? Math.round(fixAttempt.confidenceScore * 100) : null,
@@ -162,7 +184,7 @@ export class ErrorsService {
     });
 
     if (!errorEvent) {
-      throw new Error('Error event not found');
+      throw new NotFoundException('Error event not found');
     }
 
     await this.prisma.errorEvent.update({
@@ -189,17 +211,17 @@ export class ErrorsService {
     });
 
     if (!errorEvent) {
-      throw new Error('Error event not found');
+      throw new NotFoundException('Error event not found');
     }
 
     const latestFix = errorEvent.fixAttempts[0];
     if (!latestFix || !latestFix.fixedCode) {
-      throw new Error('No fix available for this error');
+      throw new BadRequestException('No fix available for this error');
     }
 
     // Only allow PR creation for failed/needs-review fixes
     if (latestFix.status !== 'NEEDS_MANUAL_REVIEW' && latestFix.status !== 'FAILED') {
-      throw new Error('Fix is not in a valid state for manual PR creation');
+      throw new BadRequestException('Fix is not in a valid state for manual PR creation');
     }
 
     const project = errorEvent.project;
@@ -207,7 +229,7 @@ export class ErrorsService {
 
     // Decrypt GitHub token
     if (!project.githubTokenEncrypted || !project.githubTokenIv) {
-      throw new Error('GitHub token not configured for project');
+      throw new BadRequestException('GitHub token not configured for project');
     }
 
     const githubToken = this.cryptoService.decrypt(
@@ -338,7 +360,7 @@ export class ErrorsService {
     });
 
     if (!errorEvent) {
-      throw new Error('Error event not found');
+      throw new NotFoundException('Error event not found');
     }
 
     // Reset status to trigger new pipeline run

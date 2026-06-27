@@ -119,36 +119,20 @@ export class IngestService {
         firstSeenAt: new Date(ingestDto.timestamp),
         lastSeenAt: new Date(ingestDto.timestamp),
 
-        // Store AI fix context
-        codeContext: ingestDto.codeContext
-          ? JSON.stringify(ingestDto.codeContext)
-          : null,
-        gitBlame: ingestDto.gitBlame
-          ? JSON.stringify(ingestDto.gitBlame)
-          : null,
-        recentDiff: ingestDto.recentDiff
-          ? JSON.stringify(ingestDto.recentDiff)
-          : null,
-
-        // Store request context
-        requestContext: ingestDto.request
-          ? JSON.stringify(ingestDto.request)
-          : null,
-
-        // Store breadcrumbs
-        breadcrumbs: ingestDto.breadcrumbs
-          ? JSON.stringify(ingestDto.breadcrumbs)
-          : null,
-
-        // Store runtime and metadata
-        runtime: JSON.stringify({
+        // These are all Json columns — store the objects directly. (Previously
+        // JSON.stringify'd, which double-encoded them into JSON string scalars
+        // and made every nested read, e.g. runtime.primaryFile, undefined.)
+        codeContext: (ingestDto.codeContext as any) ?? undefined,
+        gitBlame: (ingestDto.gitBlame as any) ?? undefined,
+        recentDiff: (ingestDto.recentDiff as any) ?? undefined,
+        requestContext: (ingestDto.request as any) ?? undefined,
+        breadcrumbs: (ingestDto.breadcrumbs as any) ?? undefined,
+        runtime: {
           ...(ingestDto.runtime || {}),
           primaryFile: stackInfo.file,
           primaryLine: stackInfo.line,
-        }),
-        metadata: ingestDto.metadata
-          ? JSON.stringify(ingestDto.metadata)
-          : null,
+        } as any,
+        metadata: (ingestDto.metadata as any) ?? undefined,
       },
     });
 
