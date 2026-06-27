@@ -42,6 +42,9 @@ export const { handlers, signIn, auth } = NextAuth({
     GitHub({
       clientId: process.env.GITHUB_CLIENT_ID || "",
       clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
+      // Explicitly request user:email so the backend can resolve a verified
+      // email even when the account's primary email is private.
+      authorization: { params: { scope: "read:user user:email" } },
     }),
     Credentials({
       credentials: {
@@ -90,12 +93,16 @@ export const { handlers, signIn, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async signIn({ user, account, profile }) {
-      // GitHub OAuth — بيبعث البيانات للـ backend ويخزن في DB
+    async signIn({ user, account }) {
+      // GitHub OAuth: hand the access token to the backend, which verifies the
+      // identity with GitHub server-side and returns our own user + tokens.
       if (account?.provider === "github") {
-        try {
-          console.log("[Auth] GitHub signIn, sending to backend...")
+        if (!account.access_token) {
+          console.error("[Auth] GitHub sign-in: no access token from provider")
+          return false
+        }
 
+        try {
           const response = await fetch(`${API_BASE}/auth/github/oauth`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -104,14 +111,12 @@ export const { handlers, signIn, auth } = NextAuth({
 
           if (!response.ok) {
             const errorText = await response.text()
-            console.error("[Auth] GitHub backend error:", errorText)
+            console.error("[Auth] GitHub backend error:", response.status, errorText)
             return false
           }
 
           const data = await response.json()
-          console.log("[Auth] GitHub OAuth success, user:", data.user?.email)
 
-          // احفظ الـ tokens والـ user data في الـ user object
           user.id           = data.user.id
           user.name         = data.user.name
           user.email        = data.user.email
