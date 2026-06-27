@@ -19,9 +19,12 @@ export function useWebSocket() {
   useEffect(() => {
     if (!session?.accessToken) return
 
-    // Initialize socket connection
-    const wsUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
-    console.log("WebSocket connecting to:", wsUrl)
+    // Socket.io is served from the API root, not under the /api HTTP prefix —
+    // strip a trailing /api from NEXT_PUBLIC_API_URL or the handshake fails.
+    const wsUrl = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001").replace(
+      /\/api\/?$/,
+      "",
+    )
     const socket = io(wsUrl, {
       auth: {
         token: session.accessToken,
@@ -37,24 +40,20 @@ export function useWebSocket() {
     socketRef.current = socket
 
     socket.on("connect", () => {
-      console.log("✅ WebSocket connected successfully with transport:", socket.io.engine.transport.name)
       setIsConnected(true)
     })
 
-    socket.on("disconnect", (reason) => {
-      console.log("❌ WebSocket disconnected, reason:", reason)
+    socket.on("disconnect", () => {
       setIsConnected(false)
     })
 
     socket.on("connect_error", (error) => {
-      console.error("🔥 WebSocket connection error:", error.message)
-      console.error("Full error:", error)
+      console.error("WebSocket connection error:", error.message)
       setIsConnected(false)
     })
 
     // Listen for notifications
     socket.on("notification", (notification: Notification) => {
-      console.log("Received notification:", notification)
       setNotifications((prev) => [notification, ...prev])
       
       // Show toast notification
@@ -66,7 +65,6 @@ export function useWebSocket() {
     })
 
     socket.on("error-update", (error: any) => {
-      console.log("Error update:", error)
       setNotifications((prev) => [
         {
           type: "error",
@@ -80,7 +78,6 @@ export function useWebSocket() {
     })
 
     socket.on("pr-update", (pr: any) => {
-      console.log("PR update:", pr)
       setNotifications((prev) => [
         {
           type: "pr",

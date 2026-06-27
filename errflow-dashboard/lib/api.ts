@@ -12,8 +12,7 @@ const SESSION_CACHE_TTL = 30000 // 30 seconds
 async function getCachedSession() {
   const now = Date.now()
   if (sessionCache.promise && now - sessionCache.time < SESSION_CACHE_TTL) {
-    const s = await sessionCache.promise
-    return s
+    return sessionCache.promise
   }
   sessionCache.time = now
   sessionCache.promise = getSession()
@@ -34,13 +33,6 @@ class ApiClient {
       "Content-Type": "application/json",
     }
 
-    // Add CORS headers for cross-origin requests
-    if (API_URL.includes("errflow.dev")) {
-      headers["Origin"] = "http://localhost:3000"
-      headers["Access-Control-Request-Method"] = "GET, POST, PATCH, DELETE"
-      headers["Access-Control-Request-Headers"] = "Content-Type, Authorization"
-    }
-
     if (session?.accessToken) {
       headers["Authorization"] = `Bearer ${session.accessToken}`
     }
@@ -48,33 +40,17 @@ class ApiClient {
     return headers
   }
 
-  private async handleResponse<T>(response: Response, retryFn?: () => Promise<Response>): Promise<T> {
-    if (response.status === 401 && retryFn) {
-      // Token might be expired, trigger a session refresh and retry
-      console.log("[API] 401 received, attempting token refresh...")
-      
-      // Clear session cache to force fresh token
-      sessionCache = { token: null, promise: null, time: 0 }
-      
-      // Wait a moment for JWT callback to refresh
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
-      // Retry the request
-      const retryResponse = await retryFn()
-      
-      if (retryResponse.status === 401) {
-        console.error("[API] Still 401 after token refresh - redirecting to login")
-        if (typeof window !== "undefined") {
-          window.location.href = "/login"
-        }
-        throw new Error("Session expired - please login again")
-      }
-      
-      return this.handleResponse<T>(retryResponse, undefined)
-    }
-
+  private async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: "Request failed" }))
+      // On 401 drop the cached session so the next request fetches a fresh
+      // token (NextAuth refreshes it proactively in its jwt callback).
+      if (response.status === 401) {
+        sessionCache = { token: null, promise: null, time: 0 }
+      }
+
+      const error = await response
+        .json()
+        .catch(() => ({ message: `Request failed with status ${response.status}` }))
       throw new Error(error.message || `Request failed with status ${response.status}`)
     }
 
@@ -89,18 +65,10 @@ class ApiClient {
       })
     }
 
-    const headers = await this.getAuthHeaders()
-   
-
     const response = await fetch(url.toString(), {
-      headers,
-      credentials: 'include',
+      headers: await this.getAuthHeaders(),
+      credentials: "include",
     })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.log("Error response:", errorText)
-    }
 
     return this.handleResponse<T>(response)
   }
@@ -110,7 +78,7 @@ class ApiClient {
       method: "POST",
       headers: await this.getAuthHeaders(),
       body: body ? JSON.stringify(body) : undefined,
-      credentials: 'include',
+      credentials: "include",
     })
 
     return this.handleResponse<T>(response)
@@ -146,7 +114,7 @@ class ApiClient {
       method: "PATCH",
       headers: await this.getAuthHeaders(),
       body: body ? JSON.stringify(body) : undefined,
-      credentials: 'include',
+      credentials: "include",
     })
 
     return this.handleResponse<T>(response)
@@ -157,7 +125,7 @@ class ApiClient {
       method: "DELETE",
       headers: await this.getAuthHeaders(),
       body: body ? JSON.stringify(body) : undefined,
-      credentials: 'include',
+      credentials: "include",
     })
 
     return this.handleResponse<T>(response)
