@@ -9,7 +9,6 @@ import {
   clearRequestContext,
   runWithRequestScope,
 } from './monitor';
-import { markResolved } from './context';
 import type { Breadcrumb, RequestContext, SeverityHints } from './monitor';
 import type { ErrorPayload } from './sender';
 import type { BeforeSendHook } from './config/env';
@@ -155,18 +154,6 @@ export class Errflow {
         next();
       });
     };
-  }
-
-  /**
-   * Mark an error fingerprint as resolved so the dashboard / AI can detect
-   * regressions if it reappears.
-   *
-   * @example
-   * // Call from your dashboard webhook after a PR is merged
-   * Errflow.markResolved('TypeError:Cannot read properties of null:at foo (src/foo.ts:42)');
-   */
-  static markResolved(fingerprint: string): void {
-    markResolved(fingerprint);
   }
 
   /**

@@ -278,34 +278,14 @@ export function calculateSeverity(
   return 'low';
 }
 
-// ─── Regression Detection ─────────────────────────────────────────────────────
-
-/**
- * A lightweight in-process registry of previously seen + resolved errors.
- * In production you'd back this with your dashboard DB — this gives the
- * same interface so the AI prompt stays consistent.
- */
-const resolvedErrors = new Map<string, string>(); // fingerprint → resolvedAt ISO
-
-export function markResolved(fingerprint: string): void {
-  resolvedErrors.set(fingerprint, new Date().toISOString());
-}
-
-export function checkRegression(fingerprint: string): {
-  isRegression: boolean;
-  previouslyResolvedAt?: string;
-} {
-  const resolvedAt = resolvedErrors.get(fingerprint);
-  if (resolvedAt) {
-    return { isRegression: true, previouslyResolvedAt: resolvedAt };
-  }
-  return { isRegression: false };
-}
-
 // ─── Public helper ────────────────────────────────────────────────────────────
 
 /**
  * Collects all AI-useful context for a given error in one call.
+ *
+ * Regression detection is intentionally not done here: it requires durable,
+ * cross-instance state (which error fingerprints were previously fixed), which
+ * the API owns. The server sets the authoritative `isRegression` on ingest.
  */
 export async function collectErrorContext(
   error: Error,
@@ -313,7 +293,6 @@ export async function collectErrorContext(
   hints: SeverityHints = {},
 ): Promise<ErrorContext> {
   const stack = error.stack ?? '';
-  const regression = checkRegression(fingerprint);
 
   // The three collectors are independent — run them concurrently.
   const [codeContext, gitBlame, recentDiff] = await Promise.all([
@@ -327,6 +306,7 @@ export async function collectErrorContext(
     gitBlame,
     recentDiff,
     severity: calculateSeverity(error, hints),
-    isRegression: regression.isRegression,
+    // Authoritative regression status is determined server-side on ingest.
+    isRegression: false,
   };
 }

@@ -119,14 +119,10 @@ The last **50 breadcrumbs** are kept. Call `Errflow.clearBreadcrumbs()` at reque
 
 ## Regression Detection
 
-After your dashboard merges a fix PR, call `markResolved` so errflow can detect if the same error comes back:
-
-```typescript
-// Call this from your dashboard webhook after a PR is merged
-Errflow.markResolved('TypeError:Cannot read properties of null:at checkout (src/checkout.ts:87)');
-```
-
-If the error reappears, the payload will contain `isRegression: true` — giving the AI the signal that the previous fix didn't fully solve the problem.
+Regression detection is automatic and handled server-side. When an error whose
+fingerprint was previously fixed reappears, the errflow API flags it as a
+regression — giving the AI the signal that the previous fix didn't fully solve
+the problem. No SDK calls are required.
 
 ---
 
@@ -226,10 +222,6 @@ Clears all breadcrumbs (call at request boundaries).
 
 Manually set or clear request context (for non-Express setups).
 
-### `Errflow.markResolved(fingerprint)`
-
-Marks an error fingerprint as resolved. Triggers `isRegression: true` if it reappears.
-
 ### `Errflow.reset()`
 
 Tears down listeners and clears all state. Designed for test teardown.
@@ -326,9 +318,7 @@ Payload sent to your dashboard (max 2 concurrent, 3 retries, 4xx not retried)
         ↓
 Dashboard feeds payload to AI → AI generates fix → PR opened
         ↓
-PR merged → Errflow.markResolved(fingerprint) called
-        ↓
-If error reappears → isRegression: true in next payload
+If a previously-fixed error reappears → API flags isRegression server-side
 ```
 
 ---
