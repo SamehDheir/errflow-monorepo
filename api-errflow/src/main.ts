@@ -23,11 +23,14 @@ async function bootstrap() {
 
   app.setGlobalPrefix("api");
 
-  const port = configService.get<number>("PORT") || 3001;
-  await app.listen(port);
+  const port = Number(configService.get("PORT")) || 3001;
+  // Bind to 0.0.0.0 so hosting platforms (Render, etc.) can detect the open
+  // port. Node's default host binding isn't reliably detected there, which
+  // makes the service look like it never opened a port.
+  await app.listen(port, "0.0.0.0");
 
-  console.log(`Application is running on: http://localhost:${port}`);
-  console.log(`API endpoints available at: http://localhost:${port}/api`);
+  console.log(`Application is running on port ${port}`);
+  console.log(`API endpoints available at /api`);
 }
 
 bootstrap();
