@@ -36,6 +36,12 @@ import { NotificationsModule } from '../notifications/notifications.module';
             password: url.password || undefined,
             username: url.username || undefined,
             tls: isUpstash ? { rejectUnauthorized: false } : undefined,
+            // Required for Bull against hosted Redis (Upstash): Bull uses
+            // blocking commands, and the readiness check hangs on Upstash —
+            // which stalls app.init()/app.listen() and prevents the port from
+            // opening. Disabling both lets the queue connect without blocking boot.
+            maxRetriesPerRequest: null,
+            enableReadyCheck: false,
           },
           settings: {
             stalledInterval: 30 * 1000,
