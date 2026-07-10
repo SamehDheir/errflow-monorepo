@@ -130,8 +130,9 @@ export interface TimelineEntry {
 }
 
 export interface AuthResponse {
-  user: User;
-  organization: Organization;
+  // The API nests the organization under `user` (there is no top-level
+  // `organization` field). `organization` is null for users without an org.
+  user: User & { organizationId: string | null; organization: Organization | null };
   accessToken: string;
   refreshToken: string;
 }

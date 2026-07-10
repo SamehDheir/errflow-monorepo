@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Inject } from '@nestjs/common';
@@ -10,6 +10,8 @@ import Redis from 'ioredis';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
@@ -17,6 +19,18 @@ export class AuthService {
     private cryptoService: CryptoService,
     @Inject('REDIS_CLIENT') private redis: Redis,
   ) {}
+
+  /** Default organization payload for a newly onboarded user (Free plan). */
+  private buildNewOrgData(handle: string) {
+    return {
+      name: `${handle}'s Organization`,
+      slug: `${handle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`,
+      plan: 'FREE' as const,
+      fixesUsedThisMonth: 0,
+      fixesLimit: 10,
+      billingCycleStart: new Date(),
+    };
+  }
 
   async validateUser(email: string, password: string): Promise<any> {
     const user = await this.prisma.user.findUnique({
@@ -235,6 +249,12 @@ export class AuthService {
     return !storedToken || storedToken !== refreshToken;
   }
 
+  /**
+   * Server-side OAuth code exchange (used if GitHub redirects here directly).
+   * The dashboard normally does the exchange itself and calls githubOAuthLogin
+   * with the token; this simply exchanges the code and delegates to that single,
+   * hardened provisioning path so there's no second, weaker code path.
+   */
   async githubLogin(code: string) {
     const clientId     = this.configService.get<string>('GITHUB_OAUTH_CLIENT_ID');
     const clientSecret = this.configService.get<string>('GITHUB_OAUTH_CLIENT_SECRET');
@@ -254,78 +274,7 @@ export class AuthService {
       throw new UnauthorizedException('Failed to exchange code for access token');
     }
 
-    const userResponse = await fetch('https://api.github.com/user', {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` },
-    });
-
-    const githubUser = await userResponse.json();
-
-    let user = await this.prisma.user.findUnique({
-      where: { email: githubUser.email },
-      include: { organization: true },
-    });
-
-    const encryptedToken = this.cryptoService.encrypt(tokenData.access_token);
-    const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-    if (!user) {
-      const orgSlug = `${githubUser.login.toLowerCase()}-${Date.now()}`;
-      const organization = await this.prisma.organization.create({
-        data: {
-          name: `${githubUser.login}'s Organization`,
-          slug: orgSlug,
-          plan: 'FREE',
-          fixesUsedThisMonth: 0,
-          fixesLimit: 10,
-          billingCycleStart: new Date(),
-        },
-      });
-
-      user = await this.prisma.user.create({
-        data: {
-          email: githubUser.email,
-          name: githubUser.name || githubUser.login,
-          passwordHash: '',
-          role: 'OWNER',
-          organizationId: organization.id,
-        } as any,
-        include: { organization: true },
-      });
-    }
-
-    user = await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        githubAccessTokenEncrypted: encryptedToken.encrypted,
-        githubAccessTokenIv: encryptedToken.iv,
-        githubAccessTokenKeyVersion: encryptedToken.keyVersion,
-        githubUsername: githubUser.login,
-        githubId: githubUser.id.toString(),
-        githubTokenExpiresAt: tokenExpiresAt,
-      } as any,
-      include: { organization: true },
-    });
-
-    const tokens = await this.generateTokens(
-      user.id, user.email, user.role, user.organizationId,
-    );
-
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        organizationId: user.organizationId,
-        organization: {
-          id: user.organization.id,
-          name: user.organization.name,
-          slug: user.organization.slug,
-          plan: user.organization.plan,
-        },
-      },
-      ...tokens,
-    };
+    return this.githubOAuthLogin(tokenData.access_token);
   }
 
   async githubOAuthLogin(accessToken: string) {
@@ -367,52 +316,76 @@ export class AuthService {
 
     const encryptedToken = this.cryptoService.encrypt(accessToken);
     const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const handle: string = githubUser.login || email.split('@')[0];
 
-    let user = await this.prisma.user.findUnique({
-      where: { email },
-      include: { organization: true },
-    });
+    // Provision the user + organization + GitHub token atomically, so a partial
+    // failure can never leave an orphaned organization or a user without a plan.
+    let user;
+    try {
+      user = await this.prisma.$transaction(async (tx) => {
+        let current = await tx.user.findUnique({
+          where: { email },
+          include: { organization: true },
+        });
 
-    if (!user) {
-      const orgSlug = `${githubUser.login.toLowerCase()}-${Date.now()}`;
-      const organization = await this.prisma.organization.create({
-        data: {
-          name: `${githubUser.login}'s Organization`,
-          slug: orgSlug,
-          plan: 'FREE',
-          fixesUsedThisMonth: 0,
-          fixesLimit: 10,
-          billingCycleStart: new Date(),
-        },
+        if (!current) {
+          // Brand-new user → create their Free organization and owner account.
+          const organization = await tx.organization.create({
+            data: this.buildNewOrgData(handle),
+          });
+          current = await tx.user.create({
+            data: {
+              email,
+              name: githubUser.name || handle,
+              passwordHash: '',
+              role: 'OWNER',
+              organizationId: organization.id,
+            },
+            include: { organization: true },
+          });
+        } else if (!current.organizationId || !current.organization) {
+          // Existing user missing an organization (edge case / prior partial
+          // signup) → back-fill one so they always land on a plan.
+          const organization = await tx.organization.create({
+            data: this.buildNewOrgData(handle),
+          });
+          current = await tx.user.update({
+            where: { id: current.id },
+            data: { organizationId: organization.id, role: 'OWNER' },
+            include: { organization: true },
+          });
+        }
+
+        return tx.user.update({
+          where: { id: current.id },
+          data: {
+            githubAccessTokenEncrypted: encryptedToken.encrypted,
+            githubAccessTokenIv: encryptedToken.iv,
+            githubAccessTokenKeyVersion: encryptedToken.keyVersion,
+            githubUsername: githubUser.login,
+            githubId: githubUser.id?.toString(),
+            githubTokenExpiresAt: tokenExpiresAt,
+          },
+          include: { organization: true },
+        });
       });
-
-      user = await this.prisma.user.create({
-        data: {
-          email,
-          name: githubUser.name || githubUser.login,
-          passwordHash: '',
-          role: 'OWNER',
-          organizationId: organization.id,
-        } as any,
-        include: { organization: true },
-      });
+    } catch (error: any) {
+      this.logger.error(
+        `GitHub OAuth provisioning failed for ${email}: ${error?.message}`,
+        error?.stack,
+      );
+      throw new UnauthorizedException('Failed to provision GitHub account');
     }
 
-    user = await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        githubAccessTokenEncrypted: encryptedToken.encrypted,
-        githubAccessTokenIv: encryptedToken.iv,
-        githubAccessTokenKeyVersion: encryptedToken.keyVersion,
-        githubUsername: githubUser.login,
-        githubId: githubUser.id.toString(),
-        githubTokenExpiresAt: tokenExpiresAt,
-      } as any,
-      include: { organization: true },
-    });
+    if (!user.organization) {
+      // Should be impossible after the transaction above, but never hand back a
+      // session without an organization.
+      this.logger.error(`GitHub user ${email} has no organization after provisioning`);
+      throw new UnauthorizedException('Account is missing an organization');
+    }
 
     const tokens = await this.generateTokens(
-      user.id, user.email, user.role, user.organizationId,
+      user.id, user.email, user.role, user.organizationId!,
     );
 
     return {
