@@ -69,9 +69,9 @@ export function UsageSection() {
                 {org?.fixesUsedThisMonth ?? 0}/{org?.fixesLimit ?? 100}
               </span>
             </div>
-            <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
               <div
-                className="h-full bg-[#EA4C48] rounded-full transition-all"
+                className="h-full bg-primary rounded-full transition-all"
                 style={{
                   width: `${Math.min(
                     ((org?.fixesUsedThisMonth ?? 0) / (org?.fixesLimit ?? 100)) * 100,

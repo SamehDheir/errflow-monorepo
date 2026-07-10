@@ -8,12 +8,12 @@ interface StatusBadgeProps {
 
 export function StatusBadge({ status }: StatusBadgeProps) {
   const styles = {
-    RECEIVED: "bg-blue-100 text-blue-700",
-    QUEUED: "bg-purple-100 text-purple-700",
-    PROCESSING: "bg-[#fde8e7] text-[#d43d39]",
-    FIX_READY: "bg-green-100 text-green-700",
-    FAILED: "bg-red-100 text-red-700",
-    IGNORED: "bg-gray-100 text-gray-700",
+    RECEIVED: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+    QUEUED: "bg-purple-500/15 text-purple-600 dark:text-purple-400",
+    PROCESSING: "bg-primary/10 text-primary",
+    FIX_READY: "bg-green-500/15 text-green-600 dark:text-green-400",
+    FAILED: "bg-destructive/10 text-destructive",
+    IGNORED: "bg-muted text-muted-foreground",
   }
 
   return (

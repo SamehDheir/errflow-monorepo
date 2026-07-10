@@ -55,11 +55,7 @@ export default function SettingsPage() {
   const { data: projects } = useProjects()
   const { data: apiKeys } = useApiKeys()
 
-  // Debug: Log when createdApiKey changes
-  console.log("SettingsPage - createdApiKey:", createdApiKey)
-
   function handleApiKeyCreated(key: string | null) {
-    console.log("handleApiKeyCreated called with:", key)
     setCreatedApiKey(key)
   }
 

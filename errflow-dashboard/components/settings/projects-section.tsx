@@ -258,7 +258,7 @@ export function ProjectsSection() {
                       href={`${project.githubRepo}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-gray-600 hover:text-[#EA4C48] flex items-center gap-1"
+                      className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1"
                     >
                       {project.githubRepo}
                       <ExternalLink className="h-3 w-3" />

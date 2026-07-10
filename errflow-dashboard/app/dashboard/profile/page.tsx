@@ -41,8 +41,8 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: number; 
     <Card>
       <CardContent className="p-6">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-[#fef2f2] rounded-lg">
-            <Icon className="h-5 w-5 text-[#EA4C48]" />
+          <div className="p-3 bg-primary/10 rounded-lg">
+            <Icon className="h-5 w-5 text-primary" />
           </div>
           <div>
             <p className="text-sm text-muted-foreground">{label}</p>
@@ -225,7 +225,7 @@ export default function ProfilePage() {
               <div className="space-y-6">
                 <div className="flex items-center gap-4">
                   <Avatar className="h-16 w-16">
-                    <AvatarFallback className="bg-[#fde8e7] text-[#d43d39] text-xl">
+                    <AvatarFallback className="bg-primary/10 text-primary text-xl">
                       {profile?.name?.charAt(0).toUpperCase() || "U"}
                     </AvatarFallback>
                   </Avatar>
@@ -270,7 +270,7 @@ export default function ProfilePage() {
             <CardContent className="space-y-4">
               <div className="p-4 bg-muted rounded-lg">
                 <div className="flex items-center gap-3 mb-3">
-                  <Building className="h-5 w-5 text-[#EA4C48]" />
+                  <Building className="h-5 w-5 text-primary" />
                   <span className="font-medium">{profile?.organization?.name}</span>
                 </div>
                 <Badge variant="secondary" className="mb-2">

@@ -41,11 +41,6 @@ export function DeleteOrganizationDialog() {
   const { register, formState, watch } = deleteForm
   const confirmTextValue = watch("confirmText", "")
 
-  // Debug: Log user role and organization data
-  console.log("Current session:", session)
-  console.log("Current organization:", org)
-  console.log("User role:", org?.members?.find(m => m.email === session?.user?.email)?.role)
-
   const isConfirmValid = confirmTextValue.toLowerCase().trim() === "delete my organization"
   const canDelete = formState.isValid && isConfirmValid
 

@@ -49,8 +49,8 @@ export function GeneralSection() {
                 <Input defaultValue={org?.name} disabled />
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Current Plan:</span>
-                <span className="px-2 py-1 bg-[#fde8e7] text-[#d43d39] dark:bg-red-900 dark:text-red-300 rounded-full text-sm font-medium">
+                <span className="text-sm text-muted-foreground">Current Plan:</span>
+                <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
                   {org?.plan}
                 </span>
               </div>

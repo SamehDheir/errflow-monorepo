@@ -78,9 +78,9 @@ function NotificationProjectCard({ project }: NotificationProjectCardProps) {
   }
 
   const severityInfo = {
-    ALL: { color: "bg-blue-100 text-blue-800", icon: Info, label: "All Errors" },
-    HIGH: { color: "bg-[#fde8e7] text-[#c0392b]", icon: AlertTriangle, label: "High & Critical" },
-    CRITICAL: { color: "bg-red-100 text-muted-foreground", icon: AlertTriangle, label: "Critical Only" },
+    ALL: { color: "bg-blue-500/15 text-blue-600 dark:text-blue-400", icon: Info, label: "All Errors" },
+    HIGH: { color: "bg-amber-500/15 text-amber-600 dark:text-amber-500", icon: AlertTriangle, label: "High & Critical" },
+    CRITICAL: { color: "bg-destructive/10 text-destructive", icon: AlertTriangle, label: "Critical Only" },
   }
 
   const SeverityIcon = severityInfo[settings.severity].icon
@@ -90,8 +90,8 @@ function NotificationProjectCard({ project }: NotificationProjectCardProps) {
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#fde8e7] rounded-lg">
-              <Bell className="h-5 w-5 text-[#EA4C48]" />
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Bell className="h-5 w-5 text-primary" />
             </div>
             <div>
               <CardTitle className="text-lg">{project.name}</CardTitle>
@@ -171,7 +171,7 @@ function NotificationProjectCard({ project }: NotificationProjectCardProps) {
                     </SelectItem>
                     <SelectItem value="HIGH">
                       <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-[#EA4C48]" />
+                        <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500" />
                         High & Critical
                       </div>
                     </SelectItem>

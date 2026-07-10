@@ -128,7 +128,7 @@ export default function PullRequestsPage() {
                         href={pr.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[#EA4C48] hover:underline"
+                        className="text-primary hover:underline"
                       >
                         #{pr.number || "N/A"}
                       </a>

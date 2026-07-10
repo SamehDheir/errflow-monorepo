@@ -274,7 +274,7 @@ export default function ErrorDetailPage({ params }: { params: Promise<{ id: stri
                   "text-xs px-2 py-1 rounded-full font-medium",
                   fixStatus === 'SUCCESS' && "bg-green-100 text-green-700",
                   fixStatus === 'FAILED' && "bg-red-100 text-red-700",
-                  fixStatus === 'NEEDS_MANUAL_REVIEW' && "bg-[#fde8e7] text-[#d43d39]",
+                  fixStatus === 'NEEDS_MANUAL_REVIEW' && "bg-amber-500/15 text-amber-600 dark:text-amber-500",
                   fixStatus === 'TESTING' && "bg-blue-100 text-blue-700",
                   fixStatus === 'GENERATING' && "bg-yellow-100 text-yellow-700",
                   fixStatus === 'ANALYZING' && "bg-purple-100 text-purple-700",
@@ -317,20 +317,20 @@ export default function ErrorDetailPage({ params }: { params: Promise<{ id: stri
         </Card>
 
         {needsManualReview && latestFix && (
-          <Card className="border-[#f5b7b1]">
+          <Card className="border-destructive/30">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Eye className="h-5 w-5 text-[#EA4C48]" />
+                <Eye className="h-5 w-5 text-destructive" />
                 <CardTitle>Manual Review Required</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="bg-[#fef2f2] border border-[#f5b7b1] rounded-lg p-3">
-                <p className="text-sm text-[#c0392b]">
+              <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3">
+                <p className="text-sm text-destructive">
                   <strong>Tests failed</strong> — The fix couldn&apos;t be automatically validated.
                 </p>
                 {latestFix.failureReason && (
-                  <p className="text-xs text-[#EA4C48] mt-1">
+                  <p className="text-xs text-destructive/80 mt-1">
                     Reason: {latestFix.failureReason.replace(/_/g, ' ')}
                   </p>
                 )}

@@ -2,6 +2,7 @@
 
 import { Bell, User, Settings, AlertCircle, CheckCircle, GitPullRequest, AlertTriangle, Menu } from "lucide-react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
@@ -31,6 +32,22 @@ function getInitials(name: string | null | undefined) {
   return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
 }
 
+const PAGE_TITLES: Record<string, string> = {
+  "/dashboard": "Overview",
+  "/dashboard/errors": "Errors",
+  "/dashboard/pull-requests": "Pull Requests",
+  "/dashboard/profile": "Profile",
+  "/dashboard/settings": "Settings",
+}
+
+function resolveTitle(pathname: string, fallback: string) {
+  if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname]
+  const match = Object.keys(PAGE_TITLES)
+    .filter((key) => key !== "/dashboard" && pathname.startsWith(key))
+    .sort((a, b) => b.length - a.length)[0]
+  return match ? PAGE_TITLES[match] : fallback
+}
+
 function getNotificationIcon(type: string) {
   switch (type) {
     case "error":
@@ -46,6 +63,8 @@ function getNotificationIcon(type: string) {
 
 export function Navbar({ title, onMenuClick, showMenuButton }: NavbarProps) {
   const { isConnected } = useRealtime()
+  const pathname = usePathname()
+  const pageTitle = resolveTitle(pathname || "", title)
   const [isMounted, setIsMounted] = useState(false)
   const { data: session } = useSession()
   const { data: organization } = useOrganization()
@@ -90,7 +109,7 @@ export function Navbar({ title, onMenuClick, showMenuButton }: NavbarProps) {
             <Menu className="h-6 w-6" />
           </Button>
         )}
-        <h1 className="text-xl font-semibold">{title}</h1>
+        <h1 className="text-xl font-semibold">{pageTitle}</h1>
       </div>
 
       <div className="flex items-center gap-4">
@@ -158,7 +177,7 @@ export function Navbar({ title, onMenuClick, showMenuButton }: NavbarProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-[#EA4C48] text-white text-sm">
+                <AvatarFallback className="bg-primary text-primary-foreground text-sm">
                   {getInitials(userName)}
                 </AvatarFallback>
               </Avatar>

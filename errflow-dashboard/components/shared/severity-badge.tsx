@@ -7,10 +7,10 @@ interface SeverityBadgeProps {
 
 export function SeverityBadge({ severity }: SeverityBadgeProps) {
   const styles = {
-    CRITICAL: "bg-red-600 text-white",
-    HIGH: "bg-[#fef2f2]0 text-white",
-    MEDIUM: "bg-yellow-500 text-gray-900",
-    LOW: "bg-gray-400 text-white",
+    CRITICAL: "bg-red-500/15 text-red-600 dark:text-red-400",
+    HIGH: "bg-orange-500/15 text-orange-600 dark:text-orange-400",
+    MEDIUM: "bg-amber-500/15 text-amber-600 dark:text-amber-500",
+    LOW: "bg-muted text-muted-foreground",
   }
 
   const icons = {

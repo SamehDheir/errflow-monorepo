@@ -83,7 +83,7 @@ export default function OverviewPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Recent Errors</CardTitle>
-            <Link href="/dashboard/errors" className="text-[#EA4C48] hover:underline text-sm flex items-center gap-1">
+            <Link href="/dashboard/errors" className="text-primary hover:underline text-sm flex items-center gap-1">
               View all <ArrowRight className="h-4 w-4" />
             </Link>
           </CardHeader>
@@ -150,7 +150,7 @@ export default function OverviewPage() {
                     </div>
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-[#EA4C48] rounded-full"
+                        className="h-full bg-primary rounded-full"
                         style={{ width: `${(error.count / (stats.topErrors[0]?.count || 1)) * 100}%` }}
                       />
                     </div>
