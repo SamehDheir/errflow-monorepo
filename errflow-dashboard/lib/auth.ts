@@ -85,7 +85,8 @@ export const { handlers, signIn, auth } = NextAuth({
             refreshToken: data.refreshToken,
             // The API nests the org under `user`; there is no top-level
             // `organization` field (fixes org/plan missing from the session).
-            organization: data.user.organization,
+            // Coerce null → undefined to match the NextAuth `User` type.
+            organization: data.user.organization ?? undefined,
           }
         } catch (error) {
           console.error("[Auth] Login exception:", error)
