@@ -8,9 +8,21 @@ import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 
+// FRONTEND_URL may hold a comma-separated list of allowed origins; the socket
+// CORS must accept each of them (mirrors the HTTP CORS config in main.ts).
+const wsAllowedOrigins = Array.from(
+  new Set([
+    ...(process.env.FRONTEND_URL || 'http://localhost:3000')
+      .split(',')
+      .map((origin) => origin.trim().replace(/\/$/, ''))
+      .filter(Boolean),
+    'http://localhost:3000',
+  ]),
+);
+
 @WebSocketGateway({
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: wsAllowedOrigins,
     credentials: true,
   },
 })

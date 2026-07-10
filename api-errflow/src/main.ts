@@ -7,9 +7,16 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  const frontendUrl = configService.get<string>("FRONTEND_URL") || "http://localhost:3000";
+  // FRONTEND_URL may be a comma-separated list of allowed origins (e.g. the
+  // apex domain, the www subdomain, and the *.vercel.app preview URL). Any of
+  // them must be able to make credentialed browser requests.
+  const frontendOrigins = (configService.get<string>("FRONTEND_URL") || "http://localhost:3000")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/$/, ""))
+    .filter(Boolean);
+  const allowedOrigins = Array.from(new Set([...frontendOrigins, "http://localhost:3000"]));
   app.enableCors({
-    origin: [frontendUrl, "http://localhost:3000"],
+    origin: allowedOrigins,
     credentials: true,
   });
 
